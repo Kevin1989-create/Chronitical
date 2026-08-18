@@ -1,6 +1,6 @@
 {
-  "name": "Ledger",
-  "short_name": "Ledger",
+  "name": "Chronitical",
+  "short_name": "Chronitical",
   "description": "Personal daily organizer — to-dos, calendar, birthdays, calories, culture, places, groceries, notes, and ideas.",
   "start_url": "./index.html",
   "scope": "./",
