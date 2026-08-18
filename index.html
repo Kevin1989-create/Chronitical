@@ -11,6 +11,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Chronitical">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
@@ -252,6 +254,12 @@
 <main id="sections"></main>
 
 <script>
+// Clickjacking mitigation: GitHub Pages serves static files with no way to set
+// X-Frame-Options/frame-ancestors headers, so this is the only defense available —
+// break out if this page is ever loaded inside someone else's iframe.
+if(window.top !== window.self){
+  window.top.location = window.self.location;
+}
 /* =========================================================================
    HOW TO ADD A NEW SECTION (ask me and I'll do this, or DIY):
    1. Add an entry to SECTIONS below: {id, label, color}
