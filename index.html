@@ -221,13 +221,14 @@
       <div style="font-size:11px; color:var(--ink-soft); margin-top:-4px;">Mic blocked? Tap the text field and use your keyboard's own dictation button instead — it works even when this one can't.</div>
       <select id="asstType" onchange="renderAssistantFields()">
         <option value="todo">To-do</option>
-        <option value="event">Calendar event</option>
-        <option value="birthday">Birthday</option>
-        <option value="food">Food</option>
-        <option value="grocery">Grocery item</option>
+        <option value="event">Calendar</option>
+        <option value="birthday">Birthdays</option>
+        <option value="cal">Calories</option>
+        <option value="culture">Culture</option>
+        <option value="grocery">Groceries</option>
         <option value="place">Location</option>
-        <option value="note">Note</option>
-        <option value="idea">Idea</option>
+        <option value="idea">Ideas</option>
+        <option value="note">Other</option>
       </select>
       <div id="asstFields"></div>
       <button class="btn btn-full" style="--btn-color:var(--c-assistant)" onclick="assistantAdd()">Log it</button>
@@ -679,25 +680,45 @@ function openAssistantModal(){
 function closeAssistantModal(){
   document.getElementById('assistantModal').style.display = 'none';
 }
+function getRecognition(interim){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR) return null;
+  const r = new SR();
+  r.lang = 'en-US';
+  r.interimResults = !!interim;
+  r.maxAlternatives = 1;
+  return r;
+}
 function voiceAssistant(){
   const btn = document.getElementById('micAsst');
-  const recognition = getRecognition();
+  const input = document.getElementById('asstQuickText');
+  const recognition = getRecognition(true);
   if(!recognition){ assistantStatus('Voice input is not supported in this browser.'); return; }
+  let finalized = false;
   btn.classList.add('listening');
   assistantStatus('Listening…');
   recognition.onresult = (e)=>{
-    const transcript = e.results[0][0].transcript;
-    document.getElementById('asstQuickText').value = transcript;
-    btn.classList.remove('listening');
-    assistantStatus('');
-    guessAssistantType();
+    let transcript = '';
+    for(let i=0; i<e.results.length; i++) transcript += e.results[i][0].transcript;
+    input.value = transcript; // live-updates as you speak, so you can see it being understood
+    if(e.results[e.results.length-1].isFinal && !finalized){
+      finalized = true;
+      btn.classList.remove('listening');
+      assistantStatus('');
+      guessAssistantType();
+    }
   };
   recognition.onerror = (e)=>{
     btn.classList.remove('listening');
-    if(e && e.error === 'not-allowed'){ assistantStatus('Microphone access was blocked — check your browser permissions.'); }
+    if(e && e.error === 'not-allowed'){ assistantStatus('Microphone access was blocked — allow it in your browser/site settings, then try again.'); }
+    else if(e && e.error === 'no-speech'){ assistantStatus("Didn't hear anything — try again a bit closer to the mic."); }
+    else if(e && e.error === 'network'){ assistantStatus('Voice recognition needs an internet connection.'); }
     else { assistantStatus("Didn't catch that — try again."); }
   };
-  recognition.onend = ()=>{ btn.classList.remove('listening'); };
+  recognition.onend = ()=>{
+    btn.classList.remove('listening');
+    if(!finalized && input.value.trim()){ finalized = true; assistantStatus(''); guessAssistantType(); }
+  };
   try{
     recognition.start();
   }catch(err){
@@ -708,13 +729,17 @@ function voiceAssistant(){
 function parseRelativeDate(text){
   const t = text.toLowerCase();
   const now = new Date();
+  if(/day after tomorrow/.test(t)){ const d=new Date(now); d.setDate(d.getDate()+2); return dateToKey(d); }
   if(/\btoday\b/.test(t)) return dateToKey(now);
   if(/\btomorrow\b/.test(t)){ const d=new Date(now); d.setDate(d.getDate()+1); return dateToKey(d); }
+  const inDays = t.match(/in (\d+) days?/);
+  if(inDays){ const d=new Date(now); d.setDate(d.getDate()+parseInt(inDays[1])); return dateToKey(d); }
   const days = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
   for(let i=0;i<days.length;i++){
     if(t.includes(days[i])){
       const d = new Date(now);
       let diff = (i - d.getDay() + 7) % 7;
+      if(diff===0 || /\bnext\b/.test(t)) diff += diff===0 ? 7 : 0; // "next <day>" or same-day-name always means the upcoming one, not today
       d.setDate(d.getDate() + diff);
       return dateToKey(d);
     }
@@ -722,30 +747,50 @@ function parseRelativeDate(text){
   return null;
 }
 function parseTimeFromText(text){
-  const m = text.match(/(\d{1,2})(?::(\d{2}))?\s?(am|pm)/i);
-  if(!m) return null;
-  let h = parseInt(m[1]);
-  const min = m[2] || '00';
-  const ap = m[3].toLowerCase();
-  if(ap==='pm' && h<12) h+=12;
-  if(ap==='am' && h===12) h=0;
-  return String(h).padStart(2,'0')+':'+min;
+  const t = text.toLowerCase();
+  if(/\bnoon\b/.test(t)) return '12:00';
+  if(/\bmidnight\b/.test(t)) return '00:00';
+  const ampm = text.match(/(\d{1,2})(?::(\d{2}))?\s?(am|pm)/i);
+  if(ampm){
+    let h = parseInt(ampm[1]);
+    const min = ampm[2] || '00';
+    const ap = ampm[3].toLowerCase();
+    if(ap==='pm' && h<12) h+=12;
+    if(ap==='am' && h===12) h=0;
+    return String(h).padStart(2,'0')+':'+min;
+  }
+  const h24 = text.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+  if(h24) return String(parseInt(h24[1])).padStart(2,'0')+':'+h24[2];
+  return null;
 }
 function parseKcalFromText(text){
   const m = text.match(/(\d{2,4})\s?(kcal|calories?)/i);
   return m ? parseInt(m[1]) : null;
 }
+function parseQtyUnitFromText(text){
+  const m = text.match(/(\d+(?:\.\d+)?)\s?(g|grams?|units?|pieces?|slices?)\b/i);
+  if(!m) return null;
+  const qty = parseFloat(m[1]);
+  const raw = m[2].toLowerCase();
+  const unit = raw.startsWith('g') ? 'g' : 'unit';
+  return {qty, unit, match:m[0]};
+}
 function guessAssistantType(){
   const text = document.getElementById('asstQuickText').value.trim();
   if(!text) return;
   const t = text.toLowerCase();
+
+  // Order matters: more specific/narrow signals are checked first so they
+  // aren't shadowed by broader ones (e.g. a reminder that happens to
+  // mention a weekday should stay a to-do, not become a calendar event).
   let type = 'note';
-  if(/kcal|calorie|\bate\b|breakfast|lunch|dinner|snack/.test(t)) type='food';
-  else if(/\bbuy\b|grocery|groceries|shopping/.test(t)) type='grocery';
-  else if(/birthday/.test(t)) type='birthday';
-  else if(/appointment|meeting|\bevent\b|tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday/.test(t)) type='event';
-  else if(/\bvisit\b|go to|want to go|travel to/.test(t)) type='place';
+  if(/birthday/.test(t)) type='birthday';
+  else if(/kcal|calories?|\bate\b|breakfast|lunch|dinner|\bsnack\b/.test(t)) type='cal';
+  else if(/\bbuy\b|grocery|groceries|shopping list/.test(t)) type='grocery';
+  else if(/\b(movie|film|series|tv show|book|novel|album|song|track|artist)\b/.test(t) || /\b(watch|read|listen to)\b/.test(t)) type='culture';
   else if(/todo|task|remind|need to|have to|don't forget/.test(t)) type='todo';
+  else if(/\bvisit\b|\bgo to\b|want to go|travel to/.test(t)) type='place';
+  else if(/appointment|meeting|\bevent\b|tomorrow|today|next week|\bmonday\b|\btuesday\b|\bwednesday\b|\bthursday\b|\bfriday\b|\bsaturday\b|\bsunday\b/.test(t)) type='event';
 
   document.getElementById('asstType').value = type;
   renderAssistantFields();
@@ -754,6 +799,7 @@ function guessAssistantType(){
     document.getElementById('asstTodoText').value = text;
     const d = parseRelativeDate(text);
     if(d) document.getElementById('asstTodoDate').value = d;
+    if(/\basap\b|urgent|right away/.test(t)) document.getElementById('asstTodoAsap').checked = true;
   } else if(type==='event'){
     document.getElementById('asstEventTitle').value = text;
     const d = parseRelativeDate(text);
@@ -761,17 +807,37 @@ function guessAssistantType(){
     const tm = parseTimeFromText(text);
     if(tm) document.getElementById('asstEventTime').value = tm;
   } else if(type==='birthday'){
-    document.getElementById('asstBdayName').value = text.replace(/birthday/i,'').trim();
+    document.getElementById('asstBdayName').value = text.replace(/birthday/i,'').replace(/\bis\b|\bon\b/gi,'').trim();
     const d = parseRelativeDate(text);
     if(d) document.getElementById('asstBdayDate').value = d;
-  } else if(type==='food'){
-    document.getElementById('asstFoodName').value = text;
+  } else if(type==='cal'){
     const kcal = parseKcalFromText(text);
+    const qu = parseQtyUnitFromText(text);
+    let name = text;
+    if(kcal) name = name.replace(new RegExp(kcal+'\\s?(kcal|calories?)','i'), '');
+    if(qu) name = name.replace(qu.match, '');
+    document.getElementById('asstFoodName').value = name.trim().replace(/^,|,$/g,'').trim();
     if(kcal) document.getElementById('asstFoodKcal').value = kcal;
+    if(qu){ document.getElementById('asstFoodQty').value = qu.qty; document.getElementById('asstFoodUnit').value = qu.unit; }
+  } else if(type==='culture'){
+    const kindMap = {artist:'artist', album:'album', song:'song', track:'song'};
+    const typeMap = {movie:'movie', film:'movie', series:'series', 'tv show':'series', book:'book', novel:'book', album:'music', song:'music', track:'music', artist:'music'};
+    let matchedType = 'movie', matchedKind = null;
+    for(const key in typeMap){ if(t.includes(key)){ matchedType = typeMap[key]; break; } }
+    for(const key in kindMap){ if(t.includes(key)){ matchedKind = kindMap[key]; break; } }
+    let title = text.replace(/\b(watch|read|listen to)\b/gi,'').replace(/\b(movie|film|series|tv show|book|novel|album|song|track|artist)\b/gi,'').trim();
+    document.getElementById('asstCultureTitle').value = title;
+    document.getElementById('asstCultureType').value = matchedType;
+    if(matchedType==='music'){
+      document.getElementById('asstCultureKindRow').style.display = 'block';
+      if(matchedKind) document.getElementById('asstCultureKindRow').value = matchedKind;
+    }
   } else if(type==='grocery'){
-    document.getElementById('asstGroceryName').value = text.replace(/^buy\s+/i,'');
+    document.getElementById('asstGroceryName').value = text.replace(/^buy\s+/i,'').replace(/^add\s+/i,'');
   } else if(type==='place'){
-    document.getElementById('asstPlaceName').value = text;
+    document.getElementById('asstPlaceName').value = text.replace(/\b(want to go|visit|go to|travel to)\b/gi,'').trim();
+  } else if(type==='idea'){
+    document.getElementById('asstIdeaBody').value = text;
   } else if(type==='note'){
     document.getElementById('asstNoteBody').value = text;
   }
@@ -800,7 +866,7 @@ function renderAssistantFields(){
     el.innerHTML = `
       <input type="text" id="asstBdayName" placeholder="Name">
       <input type="date" id="asstBdayDate">`;
-  } else if(type==='food'){
+  } else if(type==='cal'){
     el.innerHTML = `
       <input type="text" id="asstFoodName" placeholder="Food name">
       <div style="display:flex; gap:8px;">
@@ -811,6 +877,13 @@ function renderAssistantFields(){
         </select>
       </div>
       <input type="number" id="asstFoodKcal" placeholder="kcal">`;
+  } else if(type==='culture'){
+    const typeOptions = Object.entries(CULTURE_TYPE_LABELS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
+    const kindOptions = Object.entries(MUSIC_KIND_LABELS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
+    el.innerHTML = `
+      <input type="text" id="asstCultureTitle" placeholder="Title…">
+      <select id="asstCultureType" onchange="document.getElementById('asstCultureKindRow').style.display = this.value==='music' ? 'block' : 'none';">${typeOptions}</select>
+      <select id="asstCultureKindRow" style="display:none;">${kindOptions}</select>`;
   } else if(type==='grocery'){
     el.innerHTML = `<input type="text" id="asstGroceryName" placeholder="Item name">`;
   } else if(type==='place'){
@@ -818,14 +891,14 @@ function renderAssistantFields(){
     el.innerHTML = `
       <input type="text" id="asstPlaceName" placeholder="Name">
       <select id="asstPlaceCategory">${catOptions}</select>`;
-  } else if(type==='note'){
-    el.innerHTML = `
-      <input type="text" id="asstNoteTitle" placeholder="Title (optional)">
-      <textarea id="asstNoteBody" placeholder="Write something…"></textarea>`;
   } else if(type==='idea'){
     el.innerHTML = `
       <input type="text" id="asstIdeaTitle" placeholder="Title (optional)">
       <textarea id="asstIdeaBody" placeholder="Write your idea…"></textarea>`;
+  } else if(type==='note'){
+    el.innerHTML = `
+      <input type="text" id="asstNoteTitle" placeholder="Title (optional)">
+      <textarea id="asstNoteBody" placeholder="Write something…"></textarea>`;
   }
 }
 function assistantStatus(msg){
@@ -862,7 +935,7 @@ function assistantAdd(){
     sset('bdays:list', state.bdays);
     renderBdays();
     assistantStatus(`Added "${name}"'s birthday.`);
-  } else if(type==='food'){
+  } else if(type==='cal'){
     const name = document.getElementById('asstFoodName').value.trim();
     const kcal = parseInt(document.getElementById('asstFoodKcal').value);
     if(!name || !kcal){ assistantStatus('Enter a food name and kcal.'); return; }
@@ -873,6 +946,15 @@ function assistantAdd(){
     sset('cal:log', state.calories);
     renderCalories(); renderCalHistory();
     assistantStatus(`Logged "${name}" — ${kcal} kcal.`);
+  } else if(type==='culture'){
+    const title = document.getElementById('asstCultureTitle').value.trim();
+    if(!title){ assistantStatus('Enter a title.'); return; }
+    const cType = document.getElementById('asstCultureType').value;
+    const kind = cType==='music' ? document.getElementById('asstCultureKindRow').value : null;
+    state.culture.push({id:uid(), title, type:cType, kind, done:false});
+    sset('culture:list', state.culture);
+    renderCulture();
+    assistantStatus(`Added "${title}" to Culture.`);
   } else if(type==='grocery'){
     const name = document.getElementById('asstGroceryName').value.trim();
     if(!name){ assistantStatus('Enter an item name.'); return; }
@@ -884,18 +966,10 @@ function assistantAdd(){
     const name = document.getElementById('asstPlaceName').value.trim();
     if(!name){ assistantStatus('Enter a name.'); return; }
     const category = document.getElementById('asstPlaceCategory').value;
-    state.places.push({id:uid(), name, category, done:false});
+    state.places.push({id:uid(), name, category, done:false, rating:null});
     sset('places:list', state.places);
     renderPlaces();
     assistantStatus(`Added "${name}" to Location.`);
-  } else if(type==='note'){
-    const title = document.getElementById('asstNoteTitle').value.trim();
-    const body = document.getElementById('asstNoteBody').value.trim();
-    if(!title && !body){ assistantStatus('Write something first.'); return; }
-    state.notes.unshift({id:uid(), title, body, ts:Date.now()});
-    sset('notes:list', state.notes);
-    renderNotes();
-    assistantStatus('Note saved.');
   } else if(type==='idea'){
     const title = document.getElementById('asstIdeaTitle').value.trim();
     const body = document.getElementById('asstIdeaBody').value.trim();
@@ -904,6 +978,14 @@ function assistantAdd(){
     sset('ideas:list', state.ideas);
     renderIdeas();
     assistantStatus('Idea saved.');
+  } else if(type==='note'){
+    const title = document.getElementById('asstNoteTitle').value.trim();
+    const body = document.getElementById('asstNoteBody').value.trim();
+    if(!title && !body){ assistantStatus('Write something first.'); return; }
+    state.notes.unshift({id:uid(), title, body, ts:Date.now()});
+    sset('notes:list', state.notes);
+    renderNotes();
+    assistantStatus('Saved.');
   }
   document.getElementById('asstQuickText').value = '';
   renderAssistantFields();
