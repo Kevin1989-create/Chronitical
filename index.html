@@ -1,0 +1,2078 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Ledger</title>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#C89B3C">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Ledger">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#FAF5E9;
+    --paper:#FFFDF8;
+    --ink:#2E2A22;
+    --ink-soft:#948C79;
+    --ink-faint:#C7BEA9;
+    --line:#E9E0CC;
+
+    --c-today:#C89B3C;
+    --c-todo:#3F6B63;
+    --c-events:#3E6B9E;
+    --c-cal:#B4506A;
+    --c-watch:#7C5C87;
+    --c-books:#5E7C4F;
+    --c-culture:#7C5C87;
+    --c-places:#C9773D;
+    --c-upcoming:#5FA8D3;
+    --c-groceries:#4E8B5C;
+    --c-assistant:#6E6ACF;
+    --c-ideas:#B98A3E;
+    --c-notes:#4A5C8C;
+    --c-dates:#A24A3A;
+    --c-chat:#8A6242;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--cream);color:var(--ink);height:100%;font-family:'Inter',sans-serif;}
+  body{min-height:100vh; padding-bottom:24px;}
+  .num{font-family:'JetBrains Mono',monospace;}
+  h1,h2,h3{font-family:'Fraunces',serif; margin:0;}
+
+  header.top{
+    padding:26px 20px 14px;
+    position:sticky; top:0; z-index:6;
+    background:var(--cream);
+  }
+  .brand-row{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:2px;}
+  .brand{font-family:'Fraunces',serif; font-weight:700; font-size:20px; letter-spacing:-.01em;}
+  .date{color:var(--ink-soft); font-size:12px; letter-spacing:.06em; text-transform:uppercase;}
+  header.top h1{font-size:27px; font-weight:600; margin-top:6px; letter-spacing:-.01em;}
+
+  .tabstrip{
+    display:flex; flex-wrap:wrap; gap:6px; padding:12px 20px 6px;
+    position:sticky; top:78px; z-index:5; background:var(--cream);
+  }
+  .tabchip{
+    flex:0 0 auto; display:flex; align-items:center; gap:5px;
+    background:var(--paper); border:1px solid var(--line); border-radius:999px;
+    padding:6px 10px 6px 8px; font-size:11.5px; font-weight:600; color:var(--ink-soft);
+    white-space:nowrap;
+  }
+  .tabchip .dot{width:6px; height:6px; border-radius:50%; flex-shrink:0;}
+  .tabchip.active{color:var(--ink); border-color:transparent; box-shadow:0 1px 3px rgba(46,42,34,0.08), 0 0 0 1.5px var(--chip-color) inset;}
+  .tabchip-main{border:2px solid var(--chip-color); font-weight:800;}
+  .tabchip-main.active{box-shadow:0 1px 3px rgba(46,42,34,0.08), 0 0 0 2.5px var(--chip-color) inset;}
+  .tabstrip.reorder-mode .tabchip:not(.tabchip-main){touch-action:none; cursor:grab;}
+  .tabstrip.reorder-mode .tabchip.dragging{opacity:.4;}
+  #tabReorderToggle.active{color:var(--ink); font-weight:700;}
+
+  main{padding:6px 16px 40px; max-width:520px; margin:0 auto;}
+  section{display:none; animation:fade .25s ease;}
+  section.active{display:block;}
+  @keyframes fade{from{opacity:0; transform:translateY(4px)} to{opacity:1; transform:translateY(0)}}
+
+  .card{
+    position:relative;
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:18px;
+    padding:14px 16px 14px 20px;
+    margin-bottom:11px;
+    box-shadow:0 1px 2px rgba(46,42,34,0.04);
+  }
+  .card::before{
+    content:''; position:absolute; left:0; top:16px; bottom:16px; width:4px;
+    border-radius:3px; background:var(--spine, var(--c-today));
+  }
+  .card h2{font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); font-weight:600; margin-bottom:10px; font-family:'Inter',sans-serif;}
+
+  .empty{color:var(--ink-faint); font-size:12.5px; padding:8px 0; font-style:italic;}
+
+  .row{display:flex; align-items:center; gap:8px; padding:4px 0; border-bottom:1px solid var(--line);}
+  .row:last-child{border-bottom:none;}
+  .badge{width:24px; height:24px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:8px; font-weight:700; flex-shrink:0; color:#fff;}
+  .row-info{flex:1; min-width:0;}
+  .row-info b{display:block; font-size:12.5px; font-weight:600; line-height:1.2;}
+  .row-info span{font-size:10.5px; color:var(--ink-soft);}
+  .hb-row{cursor:pointer;}
+  .hb-detail{display:none;}
+  .hb-row.expanded .hb-detail{display:block;}
+  button.hb-detail{display:none;}
+  .hb-row.expanded button.hb-detail{display:inline-flex; align-items:center;}
+
+  input[type=text], input[type=number], input[type=date], input[type=time], select, textarea{
+    background:var(--cream); border:1px solid var(--line); color:var(--ink);
+    border-radius:11px; padding:11px 13px; font-size:15px; font-family:inherit; width:100%;
+  }
+  input::placeholder, textarea::placeholder{color:var(--ink-faint);}
+  textarea{resize:vertical; min-height:70px; font-family:'Inter',sans-serif;}
+  button{font-family:inherit; cursor:pointer; border:none;}
+  .add-row{display:flex; gap:8px; margin-bottom:12px;}
+  .btn{
+    background:var(--btn-color, var(--c-today)); color:#fff; font-weight:600; padding:0 18px;
+    border-radius:11px; font-size:14.5px; flex-shrink:0;
+  }
+  .btn-full{width:100%; padding:12px;}
+  .btn-ghost{background:none; color:var(--ink-soft); font-size:16px; padding:4px 6px;}
+
+  .item{display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--line);}
+  .item:last-child{border-bottom:none;}
+  .check{width:19px; height:19px; border-radius:6px; border:1.5px solid var(--ink-faint); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:12px; color:#fff; background:none;}
+  .item.done .check{background:var(--check-color, var(--c-todo)); border-color:var(--check-color, var(--c-todo));}
+  .item.done .text{text-decoration:line-through; color:var(--ink-faint);}
+  .item .text{flex:1; font-size:13.5px;}
+
+  .pill-tabs{display:flex; gap:6px; margin-bottom:14px;}
+  .pill-tabs button{flex:1; background:var(--cream); border:1px solid var(--line); color:var(--ink-soft); padding:8px; border-radius:10px; font-size:13px; font-weight:600;}
+  .pill-tabs button.active{background:var(--pill-color, var(--c-today)); color:#fff; border-color:transparent;}
+
+  .chip{border:1.5px solid var(--ink-faint); background:var(--paper); color:var(--ink-soft); border-radius:999px; padding:0 14px; height:38px; font-size:13px; font-weight:600; white-space:nowrap;}
+  .chip.active{background:var(--chip-color, var(--c-todo)); border-color:var(--chip-color, var(--c-todo)); color:#fff;}
+  .tag-asap{background:var(--c-todo); color:#fff; font-size:10px; font-weight:700; letter-spacing:.03em; padding:2px 6px; border-radius:5px; margin-left:6px; vertical-align:middle;}
+  .drag-handle{cursor:grab; color:var(--ink-faint); padding:8px 10px; touch-action:none; font-size:22px; line-height:1; user-select:none; flex-shrink:0; margin:-8px -2px; display:flex; align-items:center; justify-content:center;}
+  .item.dragging{opacity:.35;}
+
+  .goal-row{display:flex; gap:8px; align-items:center; margin-top:12px;}
+  .goal-row label{font-size:12px; color:var(--ink-soft); white-space:nowrap;}
+
+  .log-item{display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--line); font-size:14px;}
+  .log-item:last-child{border-bottom:none;}
+  .log-item .amt{font-family:'JetBrains Mono',monospace; color:var(--c-cal); font-weight:600;}
+  .log-item .meta{color:var(--ink-soft); font-size:12px;}
+
+  .cal-history-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:5px;}
+  .hist-cell{aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:9px; background:var(--cream); font-size:11px;}
+  .hist-cell.empty-cell{background:transparent;}
+  .hist-cell.hist-has{background:rgba(180,80,106,0.12);}
+  .hist-cell.hist-today{border:1.5px solid var(--c-cal);}
+  .hist-day{font-weight:600; color:var(--ink);}
+  .hist-kcal{font-family:'JetBrains Mono',monospace; font-size:9.5px; color:var(--c-cal); margin-top:2px;}
+
+  .plate-row{display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid var(--line); color:var(--ink-soft);}
+  .plate-row:last-child{border-bottom:none;}
+  .plate-row .text{flex:1; font-size:13px;}
+  .plate-row .meta{color:var(--ink-soft); font-size:11px; display:block; opacity:.8;}
+  .plate-row .btn-ghost{font-size:12px; padding:4px 8px;}
+  .plate-add{width:24px; height:24px; border-radius:50%; background:var(--c-cal); color:#fff; font-size:14px; font-weight:700; flex-shrink:0; display:flex; align-items:center; justify-content:center;}
+  .plate-row-edit{gap:6px; flex-wrap:wrap;}
+  .plate-row-edit input, .plate-row-edit select{flex:1; min-width:80px; font-size:13px; padding:6px 8px;}
+
+  .note-card{background:var(--cream); border:1px solid var(--line); border-radius:12px; padding:13px; margin-bottom:10px;}
+  .note-card .note-title{font-weight:600; font-size:14.5px; margin-bottom:4px;}
+  .note-card .note-body{font-size:13.5px; color:var(--ink-soft); white-space:pre-wrap; line-height:1.45;}
+  .note-actions{display:flex; justify-content:flex-end; margin-top:6px;}
+
+  .status-pill{font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:999px; text-transform:uppercase; letter-spacing:.03em; flex-shrink:0;}
+  .status-pill.todo{background:#EFE9D8; color:var(--ink-soft);}
+  .status-pill.done{color:#fff;}
+
+  /* mic button */
+  .mic-btn{
+    width:44px; height:44px; border-radius:11px; flex-shrink:0;
+    background:var(--cream); border:1px solid var(--line); color:var(--ink-soft);
+    display:flex; align-items:center; justify-content:center; font-size:18px;
+  }
+  .mic-btn.listening{ background:var(--mic-color, var(--c-cal)); color:#fff; border-color:transparent; animation:pulse 1.1s infinite; }
+  @keyframes pulse{ 0%{box-shadow:0 0 0 0 rgba(180,80,106,0.4);} 70%{box-shadow:0 0 0 10px rgba(180,80,106,0);} 100%{box-shadow:0 0 0 0 rgba(180,80,106,0);} }
+  .voice-status{font-size:12.5px; color:var(--ink-soft); margin-top:8px; min-height:16px;}
+
+  /* chat */
+  .chat-log{display:flex; flex-direction:column; gap:10px; margin-bottom:4px;}
+  .chat-msg{max-width:82%; padding:10px 13px; border-radius:14px; font-size:14.5px; line-height:1.4;}
+  .chat-msg.user{align-self:flex-end; background:var(--c-chat); color:#fff; border-bottom-right-radius:4px;}
+  .chat-msg.assistant{align-self:flex-start; background:var(--cream); border:1px solid var(--line); border-bottom-left-radius:4px;}
+  .chat-input-row{display:flex; gap:8px; align-items:flex-end; margin-top:10px;}
+  .chat-note{font-size:12px; color:var(--ink-faint); margin-bottom:10px; line-height:1.5;}
+
+  .assistant-fab{
+    position:fixed; top:16px; right:16px; z-index:200;
+    width:46px; height:46px; border-radius:50%;
+    background:var(--c-assistant); color:#fff; font-size:22px; font-weight:600;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 4px 14px rgba(0,0,0,.25); border:none;
+  }
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(46,42,34,.45); z-index:300;
+    display:flex; align-items:flex-end; justify-content:center;
+  }
+  .modal-card{
+    background:var(--paper); width:100%; max-width:480px; border-radius:20px 20px 0 0;
+    padding:20px; max-height:85vh; overflow-y:auto;
+  }
+  .modal-header{display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;}
+  .modal-close{background:none; border:none; font-size:24px; line-height:1; color:var(--ink-soft); padding:4px 8px;}
+  #asstFields{display:flex; flex-direction:column; gap:10px; margin:2px 0;}
+</style>
+</head>
+<body>
+
+<button class="assistant-fab" id="assistantFab" onclick="openAssistantModal()" aria-label="Quick log">＋</button>
+
+<div class="modal-overlay" id="assistantModal" style="display:none;" onclick="if(event.target===this) closeAssistantModal()">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2 style="margin:0;">Log anything</h2>
+      <button class="modal-close" onclick="closeAssistantModal()">×</button>
+    </div>
+    <div style="font-size:12px; color:var(--ink-soft); margin-bottom:10px;">Runs fully offline — no Claude involved.</div>
+    <div class="add-row" style="flex-direction:column; gap:8px;">
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="asstQuickText" placeholder="e.g. 'buy milk', 'dentist tomorrow 3pm', 'chicken salad 450kcal'…" style="flex:1;" onchange="guessAssistantType()">
+        <button class="mic-btn" id="micAsst" style="--mic-color:var(--c-assistant)" onclick="voiceAssistant()">🎙️</button>
+      </div>
+      <div style="font-size:11px; color:var(--ink-soft); margin-top:-4px;">Mic blocked? Tap the text field and use your keyboard's own dictation button instead — it works even when this one can't.</div>
+      <select id="asstType" onchange="renderAssistantFields()">
+        <option value="todo">To-do</option>
+        <option value="event">Calendar event</option>
+        <option value="birthday">Birthday</option>
+        <option value="food">Food</option>
+        <option value="grocery">Grocery item</option>
+        <option value="place">Location</option>
+        <option value="note">Note</option>
+        <option value="idea">Idea</option>
+      </select>
+      <div id="asstFields"></div>
+      <button class="btn btn-full" style="--btn-color:var(--c-assistant)" onclick="assistantAdd()">Log it</button>
+    </div>
+    <div id="asstStatus" style="font-size:13px; color:var(--ink-soft); margin-top:8px;"></div>
+  </div>
+</div>
+
+<header class="top">
+  <div class="brand-row">
+    <span class="date" id="todayDate">—</span>
+  </div>
+  <h1 id="greeting">Today</h1>
+</header>
+
+<div style="display:flex; justify-content:flex-end; padding:0 20px;">
+  <button class="btn-ghost" id="tabReorderToggle" onclick="toggleTabReorder()" style="font-size:12px;">⇄ Reorder sections</button>
+</div>
+<div class="tabstrip" id="tabstrip"></div>
+
+<main id="sections"></main>
+
+<script>
+/* =========================================================================
+   HOW TO ADD A NEW SECTION (ask me and I'll do this, or DIY):
+   1. Add an entry to SECTIONS below: {id, label, color}
+   2. Add a matching <section id="sec-<id>"> block inside buildSectionShells()
+      — for a simple checklist, reuse the Culture/Places item pattern (add/toggle/delete/render)
+      — for freeform entries, reuse the notes pattern
+   3. Load its data: state.<name> = await sget('storage-key', default) in loadAll()
+   The tab strip, styling, and nav wire up automatically from SECTIONS.
+   ========================================================================= */
+
+const SECTIONS = [
+  {id:'today',  label:'Today',     color:'var(--c-today)'},
+  {id:'todo',   label:'To-do',     color:'var(--c-todo)'},
+  {id:'events', label:'Calendar',  color:'var(--c-events)'},
+  {id:'dates',  label:'Birthdays', color:'var(--c-dates)'},
+  {id:'cal',    label:'Calories',  color:'var(--c-cal)'},
+  {id:'culture',label:'Culture',   color:'var(--c-culture)'},
+  {id:'places', label:'Location',  color:'var(--c-places)'},
+  {id:'groceries',label:'Groceries',color:'var(--c-groceries)'},
+  {id:'notes',  label:'Other',     color:'var(--c-notes)'},
+  {id:'ideas',  label:'Ideas',     color:'var(--c-ideas)'},
+  {id:'chat',   label:'Ask Claude',color:'var(--c-chat)'},
+];
+
+function todayKey(){
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function fmtDateHeader(){
+  const d = new Date();
+  return d.toLocaleDateString(undefined,{weekday:'long', month:'long', day:'numeric'});
+}
+function greetingText(){
+  const h = new Date().getHours();
+  if(h<5) return 'Still up?';
+  if(h<12) return 'Good morning';
+  if(h<17) return 'Good afternoon';
+  if(h<21) return 'Good evening';
+  return 'Winding down';
+}
+const TODAY = todayKey();
+
+/* ---------- storage: IndexedDB-backed, same interface as before (sget/sset) ---------- */
+const DB_NAME = 'ledger-db';
+const STORE_NAME = 'kv';
+let _dbPromise = null;
+function openDB(){
+  if(_dbPromise) return _dbPromise;
+  _dbPromise = new Promise((resolve, reject)=>{
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = ()=>{ req.result.createObjectStore(STORE_NAME); };
+    req.onsuccess = ()=> resolve(req.result);
+    req.onerror = ()=> reject(req.error);
+  });
+  return _dbPromise;
+}
+async function sget(key, fallback){
+  try{
+    const db = await openDB();
+    return await new Promise((resolve)=>{
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const req = tx.objectStore(STORE_NAME).get(key);
+      req.onsuccess = ()=> resolve(req.result !== undefined ? JSON.parse(req.result) : fallback);
+      req.onerror = ()=> resolve(fallback);
+    });
+  }catch(e){ return fallback; }
+}
+async function sset(key, value){
+  try{
+    const db = await openDB();
+    await new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(JSON.stringify(value), key);
+      tx.oncomplete = resolve;
+      tx.onerror = ()=> reject(tx.error);
+    });
+  }catch(e){ console.error('storage set failed', key, e); }
+}
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+
+let state = {
+  todos: [],
+  calories: {}, calGoal: 2000, foodStandards: [],
+  culture: [], places: [], groceries: [], notes: [], ideas: [], bdays: [],
+  events: [], chatHistory: []
+};
+
+let tabOrder = SECTIONS.filter(s=>s.id!=='today').map(s=>s.id);
+let tabReorderMode = false;
+function orderedSections(){
+  const bySec = Object.fromEntries(SECTIONS.map(s=>[s.id, s]));
+  const rest = tabOrder.filter(id=>bySec[id] && id!=='today');
+  SECTIONS.forEach(s=>{ if(s.id!=='today' && !rest.includes(s.id)) rest.push(s.id); });
+  return [bySec['today'], ...rest.map(id=>bySec[id])];
+}
+function buildTabstrip(){
+  const el = document.getElementById('tabstrip');
+  const current = document.querySelector('.tabchip.active');
+  const currentSec = current ? current.dataset.sec : 'today';
+  el.innerHTML = orderedSections().map(s=>`
+    <button class="tabchip ${s.id==='today'?'tabchip-main':''} ${s.id===currentSec?'active':''}" data-sec="${s.id}" style="--chip-color:${s.color}" onclick="handleTabClick('${s.id}')">
+      <span class="dot" style="background:${s.color}"></span>${s.label}
+    </button>`).join('');
+}
+function handleTabClick(sec){
+  if(tabReorderMode) return;
+  goTo(sec);
+}
+function toggleTabReorder(){
+  tabReorderMode = !tabReorderMode;
+  document.getElementById('tabstrip').classList.toggle('reorder-mode', tabReorderMode);
+  const btn = document.getElementById('tabReorderToggle');
+  btn.textContent = tabReorderMode ? '✓ Done reordering' : '⇄ Reorder sections';
+  btn.classList.toggle('active', tabReorderMode);
+}
+let tabDragId = null;
+function setupTabDrag(){
+  const strip = document.getElementById('tabstrip');
+  strip.addEventListener('pointerdown', e=>{
+    if(!tabReorderMode) return;
+    const chip = e.target.closest('.tabchip');
+    if(!chip || chip.classList.contains('tabchip-main')) return;
+    tabDragId = chip.dataset.sec;
+    chip.classList.add('dragging');
+    try{ chip.setPointerCapture(e.pointerId); }catch(err){}
+  });
+  strip.addEventListener('pointermove', e=>{
+    if(!tabDragId) return;
+    const dragging = strip.querySelector('.tabchip.dragging');
+    if(!dragging) return;
+    const siblings = Array.from(strip.querySelectorAll('.tabchip:not(.dragging):not(.tabchip-main)'));
+    let closest = null, closestDist = Infinity;
+    for(const el of siblings){
+      const box = el.getBoundingClientRect();
+      const cx = box.left + box.width/2;
+      const cy = box.top + box.height/2;
+      const dist = Math.hypot(e.clientX-cx, e.clientY-cy);
+      if(dist < closestDist){ closestDist = dist; closest = el; }
+    }
+    if(closest) strip.insertBefore(dragging, closest);
+    else strip.appendChild(dragging);
+  });
+  const endDrag = ()=>{
+    if(!tabDragId) return;
+    const dragging = strip.querySelector('.tabchip.dragging');
+    if(dragging) dragging.classList.remove('dragging');
+    tabOrder = Array.from(strip.querySelectorAll('.tabchip:not(.tabchip-main)')).map(el=>el.dataset.sec);
+    sset('tabs:order', tabOrder);
+    tabDragId = null;
+  };
+  strip.addEventListener('pointerup', endDrag);
+  strip.addEventListener('pointercancel', endDrag);
+}
+
+function goTo(sec){
+  document.querySelectorAll('main section').forEach(s=>s.classList.remove('active'));
+  document.getElementById('sec-'+sec).classList.add('active');
+  document.querySelectorAll('.tabchip').forEach(b=>b.classList.toggle('active', b.dataset.sec===sec));
+}
+
+function buildSectionShells(){
+  const main = document.getElementById('sections');
+  main.innerHTML = `
+
+  <section id="sec-today" class="active">
+    <div class="card" style="--spine:var(--c-events)">
+      <h2>Today's events</h2>
+      <div id="todayEventsList"></div>
+    </div>
+
+    <div class="card" style="--spine:var(--c-upcoming)">
+      <h2>Upcoming</h2>
+      <div id="upcomingList"></div>
+    </div>
+
+    <div class="card" style="--spine:var(--c-todo)">
+      <h2>To-do</h2>
+      <div id="dailyListToday"></div>
+    </div>
+
+    <div class="card" style="--spine:var(--c-cal)">
+      <h2>Calories today</h2>
+      <div class="rings">
+        <div class="ring-card">
+          <div class="ring-wrap">
+            <svg width="112" height="112">
+              <circle cx="56" cy="56" r="46" stroke="#E9E0CC" stroke-width="9" fill="none"/>
+              <circle id="ringCal" cx="56" cy="56" r="46" stroke="var(--c-cal)" stroke-width="9" fill="none" stroke-linecap="round" transform="rotate(-90 56 56)"/>
+            </svg>
+            <div class="ring-label"><span class="v num" id="ringCalText">0</span><span class="u">of <span id="ringCalGoal">2000</span> kcal</span></div>
+          </div>
+          <div class="ring-name">Calories</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sec-todo">
+    <div class="card" style="--spine:var(--c-todo)">
+      <h2>Add a task</h2>
+      <div class="add-row" style="flex-direction:column; gap:8px;">
+        <input type="text" id="todoInput" placeholder="Task…">
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="date" id="todoDueDate" style="flex:1;">
+          <button type="button" id="asapToggle" class="chip" style="--chip-color:var(--c-todo)" onclick="toggleAsap()">ASAP</button>
+        </div>
+        <button class="btn btn-full" style="--btn-color:var(--c-todo)" onclick="addTodoItem()">Add</button>
+      </div>
+    </div>
+    <div class="card" style="--spine:var(--c-todo)">
+      <h2>All tasks</h2>
+      <div style="font-size:12px; color:var(--ink-soft); margin:-4px 0 8px;">Drag ⠿ to reorder</div>
+      <div id="todoList"></div>
+    </div>
+  </section>
+
+  <section id="sec-events">
+    <div class="card" style="--spine:var(--c-events)">
+      <h2>Add an event</h2>
+      <div class="add-row" style="flex-direction:column; gap:8px;">
+        <input type="text" id="eventTitle" placeholder="Event title">
+        <input type="date" id="eventDate">
+        <div style="display:flex; gap:8px;">
+          <input type="time" id="eventTime" style="flex:1;" placeholder="Start">
+          <input type="time" id="eventEndTime" style="flex:1;" placeholder="End">
+        </div>
+        <button class="btn btn-full" style="--btn-color:var(--c-events)" onclick="addEvent()">Add to calendar</button>
+      </div>
+    </div>
+    <div class="card" style="--spine:var(--c-events)">
+      <h2>Upcoming</h2>
+      <div id="eventsListFull"></div>
+    </div>
+  </section>
+
+  <section id="sec-dates">
+    <div class="card" style="--spine:var(--c-dates)">
+      <h2>Add a birthday</h2>
+      <div class="add-row" style="flex-direction:column; gap:8px;">
+        <input type="text" id="bdayName" placeholder="Name">
+        <input type="date" id="bdayDate">
+        <button class="btn btn-full" style="--btn-color:var(--c-dates)" onclick="addBday()">Save</button>
+      </div>
+    </div>
+    <div class="card" style="--spine:var(--c-dates)">
+      <h2>All birthdays</h2>
+      <div id="bdayListFull"></div>
+    </div>
+  </section>
+
+  <section id="sec-cal">
+    <div class="card" style="--spine:var(--c-cal)">
+      <h2>Add food</h2>
+      <div class="add-row" style="flex-direction:column; gap:8px;">
+        <select id="foodStandardSelect" onchange="applyStandardToForm()">
+          <option value="">— custom / one-off —</option>
+        </select>
+        <input type="text" id="foodName" placeholder="Food name">
+        <div style="display:flex; gap:8px;">
+          <input type="number" id="foodQty" placeholder="Quantity" style="flex:1" oninput="recomputeFoodKcal()">
+          <select id="foodUnit" style="flex:1" onchange="recomputeFoodKcal()">
+            <option value="g">grams</option>
+            <option value="unit">units</option>
+          </select>
+        </div>
+        <input type="number" id="foodCal" placeholder="kcal">
+        <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink-soft);">
+          <input type="checkbox" id="saveAsStandard" style="width:auto;"> Save as a key plate for quick reuse
+        </label>
+        <div class="add-row">
+          <button class="btn btn-full" style="--btn-color:var(--c-cal)" onclick="addCalorie()">Add entry</button>
+        </div>
+        <div class="goal-row">
+          <label for="calGoal">Daily goal</label>
+          <input type="number" id="calGoal" placeholder="2000" onchange="saveCalGoal()">
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="--spine:var(--c-cal)">
+      <h2>Today — <span class="num" id="calTotal">0</span> kcal</h2>
+      <div id="calLog"></div>
+    </div>
+
+    <div class="card" style="--spine:var(--c-cal)">
+      <h2>History</h2>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+        <button class="btn-ghost" onclick="shiftHistoryMonth(-1)">‹</button>
+        <span id="calHistoryLabel" style="font-weight:600;"></span>
+        <button class="btn-ghost" onclick="shiftHistoryMonth(1)">›</button>
+      </div>
+      <div class="cal-history-grid" id="calHistoryGrid"></div>
+    </div>
+
+    <div class="card" style="--spine:var(--c-cal)">
+      <h2>Key plates</h2>
+      <div style="font-size:11px; color:var(--ink-soft); margin:-4px 0 8px;">Tick "Save as key plate" when logging food to add one here.</div>
+      <div id="foodStandardsList"></div>
+    </div>
+  </section>
+
+  <section id="sec-culture">
+    <div class="card" style="--spine:var(--c-culture)">
+      <h2>Add to Culture</h2>
+      <div class="add-row" style="flex-direction:column; gap:8px;">
+        <input type="text" id="cultureInput" placeholder="Title…">
+        <select id="cultureType" onchange="toggleCultureMusicKind()">
+          <option value="movie">Movie</option>
+          <option value="series">Series</option>
+          <option value="book">Book</option>
+          <option value="music">Music</option>
+        </select>
+        <select id="cultureMusicKind" style="display:none;">
+          <option value="artist">Artist</option>
+          <option value="album">Album</option>
+          <option value="song">Song</option>
+        </select>
+        <button class="btn btn-full" style="--btn-color:var(--c-culture)" onclick="addCultureItem()">Add</button>
+      </div>
+    </div>
+    <div class="card" style="--spine:var(--c-culture)">
+      <h2>Movies</h2>
+      <div id="cultureList-movie"></div>
+    </div>
+    <div class="card" style="--spine:var(--c-culture)">
+      <h2>Series</h2>
+      <div id="cultureList-series"></div>
+    </div>
+    <div class="card" style="--spine:var(--c-culture)">
+      <h2>Books</h2>
+      <div id="cultureList-book"></div>
+    </div>
+    <div class="card" style="--spine:var(--c-culture)">
+      <h2>Music</h2>
+      <div id="cultureList-music"></div>
+    </div>
+  </section>
+
+  <section id="sec-places">
+    <div class="card" style="--spine:var(--c-places)">
+      <h2>Add a location</h2>
+      <div class="add-row" style="flex-direction:column; gap:8px;">
+        <input type="text" id="placeInput" placeholder="Name…">
+        <select id="placeType">
+          <option value="country">Country</option>
+          <option value="region">Region / State</option>
+          <option value="city">City</option>
+          <option value="neighbourhood">Neighbourhood</option>
+          <option value="landmark">Landmark</option>
+          <option value="museum">Museum</option>
+          <option value="restaurant">Restaurant</option>
+          <option value="park">Park / Nature</option>
+          <option value="beach">Beach</option>
+          <option value="other">Other</option>
+        </select>
+        <button class="btn btn-full" style="--btn-color:var(--c-places)" onclick="addPlaceItem()">Add</button>
+      </div>
+    </div>
+    <div class="card" style="--spine:var(--c-places)">
+      <h2>Want to go</h2>
+      <div style="font-size:12px; color:var(--ink-soft); margin:-4px 0 8px;">Drag ⠿ into "Been there" once you've visited</div>
+      <div id="placesWantList"></div>
+    </div>
+    <div class="card" style="--spine:var(--c-places)">
+      <h2>Been there</h2>
+      <div id="placesBeenList"></div>
+    </div>
+  </section>
+
+  <section id="sec-groceries">
+    <div class="card" style="--spine:var(--c-groceries)">
+      <h2>Add item</h2>
+      <div class="add-row">
+        <input type="text" id="groceryInput" placeholder="e.g. milk">
+        <button class="btn" style="--btn-color:var(--c-groceries)" onclick="addGroceryItem()">Add</button>
+      </div>
+    </div>
+    <div class="card" style="--spine:var(--c-groceries)">
+      <h2>List</h2>
+      <div id="groceriesList"></div>
+      <button class="btn-ghost" style="margin-top:8px;" onclick="clearCheckedGroceries()">Clear checked items</button>
+    </div>
+  </section>
+
+  <section id="sec-notes">
+    <div class="card" style="--spine:var(--c-notes)">
+      <h2>New note</h2>
+      <div class="add-row" style="flex-direction:column; gap:8px;">
+        <input type="text" id="noteTitle" placeholder="Title (optional)">
+        <textarea id="noteBody" placeholder="Write something…"></textarea>
+        <button class="btn btn-full" style="--btn-color:var(--c-notes)" onclick="addNote()">Save note</button>
+      </div>
+    </div>
+    <div class="card" style="--spine:var(--c-notes)">
+      <h2>Your notes</h2>
+      <div id="notesList"></div>
+    </div>
+  </section>
+
+  <section id="sec-ideas">
+    <div class="card" style="--spine:var(--c-ideas)">
+      <h2>New idea</h2>
+      <div class="add-row" style="flex-direction:column; gap:8px;">
+        <input type="text" id="ideaTitle" placeholder="Title (optional)">
+        <textarea id="ideaBody" placeholder="Write your idea…"></textarea>
+        <button class="btn btn-full" style="--btn-color:var(--c-ideas)" onclick="addIdea()">Save idea</button>
+      </div>
+    </div>
+    <div class="card" style="--spine:var(--c-ideas)">
+      <h2>Your ideas</h2>
+      <div id="ideasList"></div>
+    </div>
+  </section>
+
+  <section id="sec-chat">
+    <div class="card" style="--spine:var(--c-chat)">
+      <h2>Ask Claude</h2>
+      <div class="chat-note">This is the only feature in the app that talks to Claude — everything else runs fully offline with no AI calls. Use this if you want help fixing or adjusting something in the app, or just want to chat. Fresh conversation each time you reload; it can't see or edit your Ledger data (yet).</div>
+      <div class="chat-log" id="chatLog"></div>
+      <div class="chat-input-row">
+        <input type="text" id="chatInput" placeholder="Type or use the mic…" onkeydown="if(event.key==='Enter') sendChat()">
+        <button class="mic-btn" id="micChat" style="--mic-color:var(--c-chat)" onclick="voiceChat()">🎙️</button>
+        <button class="btn" style="--btn-color:var(--c-chat)" onclick="sendChat()">Send</button>
+      </div>
+      <div class="voice-status" id="voiceStatusChat"></div>
+    </div>
+  </section>
+  `;
+}
+
+/* ---------- assistant: local quick-log, no Claude involved ---------- */
+function openAssistantModal(){
+  document.getElementById('assistantModal').style.display = 'flex';
+  document.getElementById('asstQuickText').value = '';
+  assistantStatus('');
+  renderAssistantFields();
+}
+function closeAssistantModal(){
+  document.getElementById('assistantModal').style.display = 'none';
+}
+function voiceAssistant(){
+  const btn = document.getElementById('micAsst');
+  const recognition = getRecognition();
+  if(!recognition){ assistantStatus('Voice input is not supported in this browser.'); return; }
+  btn.classList.add('listening');
+  assistantStatus('Listening…');
+  recognition.onresult = (e)=>{
+    const transcript = e.results[0][0].transcript;
+    document.getElementById('asstQuickText').value = transcript;
+    btn.classList.remove('listening');
+    assistantStatus('');
+    guessAssistantType();
+  };
+  recognition.onerror = (e)=>{
+    btn.classList.remove('listening');
+    if(e && e.error === 'not-allowed'){ assistantStatus('Microphone access was blocked — check your browser permissions.'); }
+    else { assistantStatus("Didn't catch that — try again."); }
+  };
+  recognition.onend = ()=>{ btn.classList.remove('listening'); };
+  try{
+    recognition.start();
+  }catch(err){
+    btn.classList.remove('listening');
+    assistantStatus('Could not start voice input — try again.');
+  }
+}
+function parseRelativeDate(text){
+  const t = text.toLowerCase();
+  const now = new Date();
+  if(/\btoday\b/.test(t)) return dateToKey(now);
+  if(/\btomorrow\b/.test(t)){ const d=new Date(now); d.setDate(d.getDate()+1); return dateToKey(d); }
+  const days = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+  for(let i=0;i<days.length;i++){
+    if(t.includes(days[i])){
+      const d = new Date(now);
+      let diff = (i - d.getDay() + 7) % 7;
+      d.setDate(d.getDate() + diff);
+      return dateToKey(d);
+    }
+  }
+  return null;
+}
+function parseTimeFromText(text){
+  const m = text.match(/(\d{1,2})(?::(\d{2}))?\s?(am|pm)/i);
+  if(!m) return null;
+  let h = parseInt(m[1]);
+  const min = m[2] || '00';
+  const ap = m[3].toLowerCase();
+  if(ap==='pm' && h<12) h+=12;
+  if(ap==='am' && h===12) h=0;
+  return String(h).padStart(2,'0')+':'+min;
+}
+function parseKcalFromText(text){
+  const m = text.match(/(\d{2,4})\s?(kcal|calories?)/i);
+  return m ? parseInt(m[1]) : null;
+}
+function guessAssistantType(){
+  const text = document.getElementById('asstQuickText').value.trim();
+  if(!text) return;
+  const t = text.toLowerCase();
+  let type = 'note';
+  if(/kcal|calorie|\bate\b|breakfast|lunch|dinner|snack/.test(t)) type='food';
+  else if(/\bbuy\b|grocery|groceries|shopping/.test(t)) type='grocery';
+  else if(/birthday/.test(t)) type='birthday';
+  else if(/appointment|meeting|\bevent\b|tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday/.test(t)) type='event';
+  else if(/\bvisit\b|go to|want to go|travel to/.test(t)) type='place';
+  else if(/todo|task|remind|need to|have to|don't forget/.test(t)) type='todo';
+
+  document.getElementById('asstType').value = type;
+  renderAssistantFields();
+
+  if(type==='todo'){
+    document.getElementById('asstTodoText').value = text;
+    const d = parseRelativeDate(text);
+    if(d) document.getElementById('asstTodoDate').value = d;
+  } else if(type==='event'){
+    document.getElementById('asstEventTitle').value = text;
+    const d = parseRelativeDate(text);
+    if(d) document.getElementById('asstEventDate').value = d;
+    const tm = parseTimeFromText(text);
+    if(tm) document.getElementById('asstEventTime').value = tm;
+  } else if(type==='birthday'){
+    document.getElementById('asstBdayName').value = text.replace(/birthday/i,'').trim();
+    const d = parseRelativeDate(text);
+    if(d) document.getElementById('asstBdayDate').value = d;
+  } else if(type==='food'){
+    document.getElementById('asstFoodName').value = text;
+    const kcal = parseKcalFromText(text);
+    if(kcal) document.getElementById('asstFoodKcal').value = kcal;
+  } else if(type==='grocery'){
+    document.getElementById('asstGroceryName').value = text.replace(/^buy\s+/i,'');
+  } else if(type==='place'){
+    document.getElementById('asstPlaceName').value = text;
+  } else if(type==='note'){
+    document.getElementById('asstNoteBody').value = text;
+  }
+}
+function renderAssistantFields(){
+  const type = document.getElementById('asstType').value;
+  const el = document.getElementById('asstFields');
+  if(type==='todo'){
+    el.innerHTML = `
+      <input type="text" id="asstTodoText" placeholder="What do you need to do?">
+      <div style="display:flex; gap:8px; align-items:center;">
+        <input type="date" id="asstTodoDate" style="flex:1;">
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px; color:var(--ink-soft); white-space:nowrap;">
+          <input type="checkbox" id="asstTodoAsap" style="width:auto;"> ASAP
+        </label>
+      </div>`;
+  } else if(type==='event'){
+    el.innerHTML = `
+      <input type="text" id="asstEventTitle" placeholder="Event title">
+      <input type="date" id="asstEventDate">
+      <div style="display:flex; gap:8px;">
+        <input type="time" id="asstEventTime" style="flex:1;">
+        <input type="time" id="asstEventEndTime" style="flex:1;">
+      </div>`;
+  } else if(type==='birthday'){
+    el.innerHTML = `
+      <input type="text" id="asstBdayName" placeholder="Name">
+      <input type="date" id="asstBdayDate">`;
+  } else if(type==='food'){
+    el.innerHTML = `
+      <input type="text" id="asstFoodName" placeholder="Food name">
+      <div style="display:flex; gap:8px;">
+        <input type="number" id="asstFoodQty" placeholder="Quantity (optional)" style="flex:1;">
+        <select id="asstFoodUnit" style="flex:1;">
+          <option value="g">grams</option>
+          <option value="unit">units</option>
+        </select>
+      </div>
+      <input type="number" id="asstFoodKcal" placeholder="kcal">`;
+  } else if(type==='grocery'){
+    el.innerHTML = `<input type="text" id="asstGroceryName" placeholder="Item name">`;
+  } else if(type==='place'){
+    const catOptions = Object.entries(PLACE_LABELS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
+    el.innerHTML = `
+      <input type="text" id="asstPlaceName" placeholder="Name">
+      <select id="asstPlaceCategory">${catOptions}</select>`;
+  } else if(type==='note'){
+    el.innerHTML = `
+      <input type="text" id="asstNoteTitle" placeholder="Title (optional)">
+      <textarea id="asstNoteBody" placeholder="Write something…"></textarea>`;
+  } else if(type==='idea'){
+    el.innerHTML = `
+      <input type="text" id="asstIdeaTitle" placeholder="Title (optional)">
+      <textarea id="asstIdeaBody" placeholder="Write your idea…"></textarea>`;
+  }
+}
+function assistantStatus(msg){
+  const el = document.getElementById('asstStatus');
+  if(el) el.textContent = msg;
+}
+function assistantAdd(){
+  const type = document.getElementById('asstType').value;
+  if(type==='todo'){
+    const text = document.getElementById('asstTodoText').value.trim();
+    if(!text){ assistantStatus('Enter a task first.'); return; }
+    const dueDate = document.getElementById('asstTodoDate').value || null;
+    const asap = document.getElementById('asstTodoAsap').checked;
+    const maxOrder = state.todos.reduce((m,t)=>Math.max(m, t.order||0), -1);
+    state.todos.push({id:uid(), text, done:false, dueDate, asap, order:maxOrder+1});
+    sset('todos:all', state.todos);
+    renderTodoList(); renderTodayTodos();
+    assistantStatus(`Added "${text}" to your to-do list.`);
+  } else if(type==='event'){
+    const title = document.getElementById('asstEventTitle').value.trim();
+    const date = document.getElementById('asstEventDate').value;
+    if(!title || !date){ assistantStatus('An event needs a title and a date.'); return; }
+    const time = document.getElementById('asstEventTime').value;
+    const endTime = document.getElementById('asstEventEndTime').value;
+    state.events.push({id:uid(), title, date, time, endTime});
+    sset('events:list', state.events);
+    renderEvents();
+    assistantStatus(`Added "${title}" to your calendar.`);
+  } else if(type==='birthday'){
+    const name = document.getElementById('asstBdayName').value.trim();
+    const date = document.getElementById('asstBdayDate').value;
+    if(!name || !date){ assistantStatus('A birthday needs a name and a date.'); return; }
+    state.bdays.push({id:uid(), name, date});
+    sset('bdays:list', state.bdays);
+    renderBdays();
+    assistantStatus(`Added "${name}"'s birthday.`);
+  } else if(type==='food'){
+    const name = document.getElementById('asstFoodName').value.trim();
+    const kcal = parseInt(document.getElementById('asstFoodKcal').value);
+    if(!name || !kcal){ assistantStatus('Enter a food name and kcal.'); return; }
+    const qty = parseFloat(document.getElementById('asstFoodQty').value) || null;
+    const unit = document.getElementById('asstFoodUnit').value;
+    if(!state.calories[TODAY]) state.calories[TODAY]=[];
+    state.calories[TODAY].push({id:uid(), name, kcal, qty, unit});
+    sset('cal:log', state.calories);
+    renderCalories(); renderCalHistory();
+    assistantStatus(`Logged "${name}" — ${kcal} kcal.`);
+  } else if(type==='grocery'){
+    const name = document.getElementById('asstGroceryName').value.trim();
+    if(!name){ assistantStatus('Enter an item name.'); return; }
+    state.groceries.push({id:uid(), name, done:false});
+    sset('groceries:list', state.groceries);
+    renderGroceries();
+    assistantStatus(`Added "${name}" to groceries.`);
+  } else if(type==='place'){
+    const name = document.getElementById('asstPlaceName').value.trim();
+    if(!name){ assistantStatus('Enter a name.'); return; }
+    const category = document.getElementById('asstPlaceCategory').value;
+    state.places.push({id:uid(), name, category, done:false});
+    sset('places:list', state.places);
+    renderPlaces();
+    assistantStatus(`Added "${name}" to Location.`);
+  } else if(type==='note'){
+    const title = document.getElementById('asstNoteTitle').value.trim();
+    const body = document.getElementById('asstNoteBody').value.trim();
+    if(!title && !body){ assistantStatus('Write something first.'); return; }
+    state.notes.unshift({id:uid(), title, body, ts:Date.now()});
+    sset('notes:list', state.notes);
+    renderNotes();
+    assistantStatus('Note saved.');
+  } else if(type==='idea'){
+    const title = document.getElementById('asstIdeaTitle').value.trim();
+    const body = document.getElementById('asstIdeaBody').value.trim();
+    if(!title && !body){ assistantStatus('Write something first.'); return; }
+    state.ideas.unshift({id:uid(), title, body, ts:Date.now()});
+    sset('ideas:list', state.ideas);
+    renderIdeas();
+    assistantStatus('Idea saved.');
+  }
+  document.getElementById('asstQuickText').value = '';
+  renderAssistantFields();
+}
+
+/* ---------- todos (unified list: optional due date, ASAP flag, manual drag order) ---------- */
+let asapActive = false;
+function toggleAsap(){
+  asapActive = !asapActive;
+  document.getElementById('asapToggle').classList.toggle('active', asapActive);
+}
+function addTodoItem(){
+  const textEl = document.getElementById('todoInput');
+  const dateEl = document.getElementById('todoDueDate');
+  const text = textEl.value.trim();
+  if(!text) return;
+  const dueDate = asapActive ? null : (dateEl.value || null);
+  const maxOrder = state.todos.reduce((m,t)=>Math.max(m, t.order||0), -1);
+  state.todos.push({id:uid(), text, done:false, dueDate, asap:asapActive, order:maxOrder+1});
+  sset('todos:all', state.todos);
+  textEl.value=''; dateEl.value='';
+  asapActive = false;
+  document.getElementById('asapToggle').classList.remove('active');
+  renderTodoList(); renderTodayTodos();
+}
+function toggleTodoItem(id){
+  const t = state.todos.find(t=>t.id===id);
+  if(t){ t.done = !t.done; sset('todos:all', state.todos); }
+  renderTodoList(); renderTodayTodos();
+}
+function deleteTodoItem(id){
+  state.todos = state.todos.filter(t=>t.id!==id);
+  sset('todos:all', state.todos);
+  renderTodoList(); renderTodayTodos();
+}
+function fmtDue(dateStr){
+  const d = new Date(dateStr+'T00:00:00');
+  return d.toLocaleDateString(undefined,{month:'short', day:'numeric'});
+}
+let editingTodoId = null;
+function startEditTodo(id){ editingTodoId = id; renderTodoList(); }
+function cancelEditTodo(){ editingTodoId = null; renderTodoList(); }
+function saveEditTodo(id){
+  const t = state.todos.find(t=>t.id===id);
+  if(t){
+    t.text = document.getElementById('editTodoText-'+id).value.trim();
+    t.dueDate = document.getElementById('editTodoDate-'+id).value || null;
+    t.asap = document.getElementById('editTodoAsap-'+id).checked;
+    sset('todos:all', state.todos);
+  }
+  editingTodoId = null;
+  renderTodoList(); renderTodayTodos();
+}
+function renderTodoList(){
+  const el = document.getElementById('todoList');
+  if(!el) return;
+  // Manual order (set via drag) governs open tasks here; done tasks sink to the bottom, crossed out.
+  const sorted = [...state.todos].sort((a,b)=>{
+    if(a.done !== b.done) return a.done ? 1 : -1;
+    return (a.order||0) - (b.order||0);
+  });
+  el.innerHTML = sorted.length ? sorted.map(t=>{
+    if(editingTodoId === t.id){
+      return `<div class="item" style="flex-direction:column; align-items:stretch; gap:8px;">
+        <input type="text" id="editTodoText-${t.id}" value="${escapeHtml(t.text)}" placeholder="Task…">
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="date" id="editTodoDate-${t.id}" value="${t.dueDate||''}" style="flex:1;">
+          <label style="display:flex; align-items:center; gap:6px; font-size:13px; color:var(--ink-soft); white-space:nowrap;">
+            <input type="checkbox" id="editTodoAsap-${t.id}" style="width:auto;" ${t.asap?'checked':''}> ASAP
+          </label>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn-ghost" onclick="saveEditTodo('${t.id}')">Save</button>
+          <button class="btn-ghost" onclick="cancelEditTodo()">Cancel</button>
+        </div>
+      </div>`;
+    }
+    return `<div class="item ${t.done?'done':''}" data-id="${t.id}" style="--check-color:var(--c-todo)">
+      ${!t.done ? '<span class="drag-handle">⠿</span>' : '<span style="width:22px;flex-shrink:0;"></span>'}
+      <button class="check" onclick="toggleTodoItem('${t.id}')">${t.done?'✓':''}</button>
+      <div class="text">${escapeHtml(t.text)}${t.asap ? '<span class="tag-asap">ASAP</span>' : ''}${t.dueDate ? ` <span style="color:var(--ink-soft); font-size:12px;">· due ${fmtDue(t.dueDate)}</span>` : ''}</div>
+      <button class="btn-ghost" onclick="startEditTodo('${t.id}')">Edit</button>
+      <button class="btn-ghost" onclick="deleteTodoItem('${t.id}')">×</button>
+    </div>`;
+  }).join('') : '<div class="empty">No tasks yet.</div>';
+}
+function renderTodayTodos(){
+  // Home page: every open (not-done) task, ASAP first, then soonest due date, then no-date tasks.
+  // Tick to complete — it then disappears from Home but stays visible (crossed out) in the To-do section.
+  const list = [...state.todos].filter(t=>!t.done).sort((a,b)=>{
+    if(a.asap !== b.asap) return a.asap ? -1 : 1;
+    if(a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+    if(a.dueDate) return -1;
+    if(b.dueDate) return 1;
+    return (a.order||0) - (b.order||0);
+  });
+  const el = document.getElementById('dailyListToday');
+  if(!el) return;
+  el.innerHTML = list.length ? list.map(t=>`
+    <div class="row">
+      <div class="row-info"><b>${escapeHtml(t.text)}${t.asap ? '<span class="tag-asap">ASAP</span>' : ''}</b>${t.dueDate ? `<span>Due ${fmtDue(t.dueDate)}</span>` : ''}</div>
+      <button class="check" style="--check-color:var(--c-todo)" onclick="toggleTodoItem('${t.id}')"></button>
+    </div>`).join('') : '<div class="empty">Nothing on your to-do list.</div>';
+}
+
+/* ---------- drag-to-reorder for the To-do section (pointer events; works on touch + mouse) ---------- */
+let dragId = null;
+function setupTodoDrag(){
+  const list = document.getElementById('todoList');
+  if(!list) return;
+  list.addEventListener('pointerdown', e=>{
+    const handle = e.target.closest('.drag-handle');
+    if(!handle) return;
+    const item = handle.closest('.item');
+    dragId = item.dataset.id;
+    item.classList.add('dragging');
+    try{ handle.setPointerCapture(e.pointerId); }catch(err){}
+  });
+  list.addEventListener('pointermove', e=>{
+    if(!dragId) return;
+    const dragging = list.querySelector('.item.dragging');
+    if(!dragging) return;
+    const siblings = Array.from(list.querySelectorAll('.item:not(.dragging)'));
+    const y = e.clientY;
+    let after = null;
+    for(const el of siblings){
+      const box = el.getBoundingClientRect();
+      if(y < box.top + box.height/2){ after = el; break; }
+    }
+    if(after) list.insertBefore(dragging, after);
+    else list.appendChild(dragging);
+  });
+  const endDrag = ()=>{
+    if(!dragId) return;
+    const dragging = list.querySelector('.item.dragging');
+    if(dragging) dragging.classList.remove('dragging');
+    const ids = Array.from(list.querySelectorAll('.item[data-id]')).map(el=>el.dataset.id);
+    ids.forEach((id, idx)=>{
+      const t = state.todos.find(t=>t.id===id);
+      if(t) t.order = idx;
+    });
+    sset('todos:all', state.todos);
+    dragId = null;
+    renderTodoList(); renderTodayTodos();
+  };
+  list.addEventListener('pointerup', endDrag);
+  list.addEventListener('pointercancel', endDrag);
+}
+
+/* ---------- calendar events ---------- */
+function addEvent(){
+  const titleEl = document.getElementById('eventTitle');
+  const dateEl = document.getElementById('eventDate');
+  const timeEl = document.getElementById('eventTime');
+  const endTimeEl = document.getElementById('eventEndTime');
+  const title = titleEl.value.trim();
+  const date = dateEl.value;
+  const time = timeEl.value;
+  const endTime = endTimeEl.value;
+  if(!title || !date) return;
+  state.events.push({id:uid(), title, date, time, endTime});
+  sset('events:list', state.events);
+  titleEl.value=''; dateEl.value=''; timeEl.value=''; endTimeEl.value='';
+  renderEvents();
+}
+function deleteEvent(id){
+  state.events = state.events.filter(e=>e.id!==id);
+  sset('events:list', state.events);
+  renderEvents();
+}
+let editingEventId = null;
+function fmtEventTime(e){
+  if(e.time && e.endTime) return e.time+'–'+e.endTime;
+  if(e.time) return e.time;
+  return '';
+}
+function startEditEvent(id){ editingEventId = id; renderEvents(); }
+function cancelEditEvent(){ editingEventId = null; renderEvents(); }
+function saveEditEvent(id){
+  const e = state.events.find(e=>e.id===id);
+  if(e){
+    e.title = document.getElementById('editEvTitle-'+id).value.trim();
+    e.date = document.getElementById('editEvDate-'+id).value;
+    e.time = document.getElementById('editEvTime-'+id).value;
+    e.endTime = document.getElementById('editEvEndTime-'+id).value;
+    sset('events:list', state.events);
+  }
+  editingEventId = null;
+  renderEvents();
+}
+function toggleRowExpand(el){ el.classList.toggle('expanded'); }
+function renderEvents(){
+  const sorted = [...state.events].sort((a,b)=> (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')));
+  const upcoming = sorted.filter(e=>e.date>=TODAY);
+  const fullEl = document.getElementById('eventsListFull');
+  if(fullEl) fullEl.innerHTML = upcoming.length ? upcoming.map(e=>{
+    if(editingEventId === e.id){
+      return `<div class="item" style="flex-direction:column; align-items:stretch; gap:8px;">
+        <input type="text" id="editEvTitle-${e.id}" value="${escapeHtml(e.title)}" placeholder="Event title">
+        <input type="date" id="editEvDate-${e.id}" value="${e.date}">
+        <div style="display:flex; gap:8px;">
+          <input type="time" id="editEvTime-${e.id}" value="${e.time||''}" style="flex:1;">
+          <input type="time" id="editEvEndTime-${e.id}" value="${e.endTime||''}" style="flex:1;">
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn-ghost" onclick="saveEditEvent('${e.id}')">Save</button>
+          <button class="btn-ghost" onclick="cancelEditEvent()">Cancel</button>
+        </div>
+      </div>`;
+    }
+    const d = new Date(e.date+'T00:00:00');
+    const md = d.toLocaleDateString(undefined,{month:'short', day:'numeric'});
+    const tm = fmtEventTime(e);
+    return `<div class="row">
+      <div class="badge" style="background:var(--c-events)">${md.split(' ')[0].slice(0,3)}</div>
+      <div class="row-info"><b>${escapeHtml(e.title)}</b><span>${md}${tm ? ' · '+tm : ''}</span></div>
+      <button class="btn-ghost" onclick="startEditEvent('${e.id}')">Edit</button>
+      <button class="btn-ghost" onclick="deleteEvent('${e.id}')">×</button>
+    </div>`;
+  }).join('') : '<div class="empty">No events yet.</div>';
+
+  const todayList = sorted.filter(e=>e.date===TODAY);
+  const todayBdays = state.bdays.filter(b=>daysUntil(b.date)===0);
+  const todayEl = document.getElementById('todayEventsList');
+  const todayItemsHTML = [
+    ...todayList.map(e=>{
+      const tm = fmtEventTime(e);
+      return `<div class="row hb-row" onclick="toggleRowExpand(this)">
+      <div class="badge" style="background:var(--c-events)">📅</div>
+      <div class="row-info"><b>${escapeHtml(e.title)}</b>${tm ? `<span class="hb-detail">${tm}</span>` : ''}</div>
+      <button class="btn-ghost hb-detail" onclick="event.stopPropagation(); deleteEvent('${e.id}')">×</button>
+    </div>`;
+    }),
+    ...todayBdays.map(b=>`
+    <div class="row hb-row" onclick="toggleRowExpand(this)">
+      <div class="badge" style="background:var(--c-dates)">🎂</div>
+      <div class="row-info"><b>${escapeHtml(b.name)}</b><span class="hb-detail">Birthday today</span></div>
+    </div>`),
+  ];
+  if(todayEl) todayEl.innerHTML = todayItemsHTML.length ? todayItemsHTML.join('') : '<div class="empty">Nothing on the calendar today.</div>';
+
+  renderUpcomingHome();
+}
+
+/* ---------- calories (with quantity, key-plate standards, and a history calendar) ---------- */
+function applyStandardToForm(){
+  const id = document.getElementById('foodStandardSelect').value;
+  if(!id) return;
+  const s = state.foodStandards.find(s=>s.id===id);
+  if(!s) return;
+  document.getElementById('foodName').value = s.name;
+  document.getElementById('foodUnit').value = s.basis==='perUnit' ? 'unit' : 'g';
+  document.getElementById('foodQty').value = s.basis==='perUnit' ? 1 : 100;
+  recomputeFoodKcal();
+}
+function recomputeFoodKcal(){
+  const id = document.getElementById('foodStandardSelect').value;
+  if(!id) return; // no standard selected: kcal stays manual
+  const s = state.foodStandards.find(s=>s.id===id);
+  if(!s) return;
+  const qty = parseFloat(document.getElementById('foodQty').value) || 0;
+  const kcal = s.basis==='perUnit' ? Math.round(s.kcalBase * qty) : Math.round(s.kcalBase * qty/100);
+  document.getElementById('foodCal').value = kcal;
+}
+function addCalorie(){
+  const nameEl = document.getElementById('foodName');
+  const calEl = document.getElementById('foodCal');
+  const qtyEl = document.getElementById('foodQty');
+  const unitEl = document.getElementById('foodUnit');
+  const saveStdEl = document.getElementById('saveAsStandard');
+  const name = nameEl.value.trim();
+  const kcal = parseInt(calEl.value);
+  const qty = parseFloat(qtyEl.value) || null;
+  const unit = unitEl.value;
+  if(!name || !kcal) return;
+  if(!state.calories[TODAY]) state.calories[TODAY]=[];
+  state.calories[TODAY].push({id:uid(), name, kcal, qty, unit});
+  sset('cal:log', state.calories);
+
+  if(saveStdEl.checked && qty){
+    const basis = unit==='unit' ? 'perUnit' : 'per100g';
+    const kcalBase = basis==='perUnit' ? Math.round(kcal/qty) : Math.round(kcal/qty*100);
+    state.foodStandards.push({id:uid(), name, basis, kcalBase});
+    sset('food:standards', state.foodStandards);
+    renderFoodStandards();
+  }
+
+  nameEl.value=''; calEl.value=''; qtyEl.value=''; saveStdEl.checked=false;
+  document.getElementById('foodStandardSelect').value='';
+  renderCalories();
+  renderCalHistory();
+}
+function deleteCalorie(id){
+  state.calories[TODAY] = (state.calories[TODAY]||[]).filter(e=>e.id!==id);
+  sset('cal:log', state.calories);
+  renderCalories();
+  renderCalHistory();
+}
+function saveCalGoal(){
+  const v = parseInt(document.getElementById('calGoal').value) || 2000;
+  state.calGoal = v;
+  sset('cal:goal', v);
+}
+function fmtQty(e){
+  if(!e.qty) return '';
+  return e.unit==='unit' ? `${e.qty} unit${e.qty===1?'':'s'}` : `${e.qty} g`;
+}
+function renderCalories(){
+  const list = state.calories[TODAY]||[];
+  const total = list.reduce((s,e)=>s+e.kcal,0);
+  const totalEl = document.getElementById('calTotal');
+  if(totalEl) totalEl.textContent = total;
+  const el = document.getElementById('calLog');
+  if(el) el.innerHTML = list.length ? list.map(e=>`
+    <div class="log-item">
+      <span>${escapeHtml(e.name)}${e.qty ? ` <span class="meta">· ${fmtQty(e)}</span>` : ''}</span>
+      <span><span class="amt">${e.kcal}</span> <button class="btn-ghost" onclick="deleteCalorie('${e.id}')">×</button></span>
+    </div>`).join('') : '<div class="empty">No entries yet today.</div>';
+  const goalEl = document.getElementById('calGoal');
+  if(goalEl) goalEl.value = state.calGoal;
+
+  // Home page ring — was previously never wired up, so it always showed 0
+  const goal = state.calGoal || 2000;
+  const ringEl = document.getElementById('ringCal');
+  const ringTextEl = document.getElementById('ringCalText');
+  const ringGoalEl = document.getElementById('ringCalGoal');
+  if(ringEl){
+    const circumference = 2*Math.PI*46;
+    const frac = Math.max(0, Math.min(total/goal, 1));
+    ringEl.style.strokeDasharray = `${circumference}`;
+    ringEl.style.strokeDashoffset = `${circumference*(1-frac)}`;
+  }
+  if(ringTextEl) ringTextEl.textContent = total;
+  if(ringGoalEl) ringGoalEl.textContent = goal;
+}
+
+/* ---------- key plates (reusable standard foods) ---------- */
+function addFoodStandard(){
+  const nameEl = document.getElementById('stdName');
+  const basisEl = document.getElementById('stdBasis');
+  const kcalEl = document.getElementById('stdKcal');
+  const name = nameEl.value.trim();
+  const kcalBase = parseInt(kcalEl.value);
+  if(!name || !kcalBase){
+    alert('Enter both a name and a kcal value to save a key plate.');
+    return;
+  }
+  state.foodStandards.push({id:uid(), name, basis:basisEl.value, kcalBase});
+  sset('food:standards', state.foodStandards);
+  nameEl.value=''; kcalEl.value='';
+  renderFoodStandards();
+}
+function deleteFoodStandard(id){
+  state.foodStandards = state.foodStandards.filter(s=>s.id!==id);
+  sset('food:standards', state.foodStandards);
+  renderFoodStandards();
+}
+function quickAddStandard(id){
+  const s = state.foodStandards.find(s=>s.id===id);
+  if(!s) return;
+  const qty = s.basis==='perUnit' ? 1 : 100;
+  if(!state.calories[TODAY]) state.calories[TODAY]=[];
+  state.calories[TODAY].push({id:uid(), name:s.name, kcal:s.kcalBase, qty, unit: s.basis==='perUnit'?'unit':'g'});
+  sset('cal:log', state.calories);
+  renderCalories();
+  renderCalHistory();
+}
+let editingStdId = null;
+function startEditFoodStandard(id){ editingStdId = id; renderFoodStandards(); }
+function cancelEditFoodStandard(){ editingStdId = null; renderFoodStandards(); }
+function saveEditFoodStandard(id){
+  const s = state.foodStandards.find(s=>s.id===id);
+  if(s){
+    s.name = document.getElementById('editStdName-'+id).value.trim();
+    s.basis = document.getElementById('editStdBasis-'+id).value;
+    s.kcalBase = parseInt(document.getElementById('editStdKcal-'+id).value) || s.kcalBase;
+    sset('food:standards', state.foodStandards);
+  }
+  editingStdId = null;
+  renderFoodStandards();
+}
+function renderFoodStandards(){
+  const select = document.getElementById('foodStandardSelect');
+  if(select){
+    const current = select.value;
+    select.innerHTML = '<option value="">— custom / one-off —</option>' + state.foodStandards.map(s=>
+      `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+    select.value = current;
+  }
+  const el = document.getElementById('foodStandardsList');
+  if(!el) return;
+  if(!state.foodStandards.length){ el.innerHTML = '<div class="empty">No key plates saved yet.</div>'; return; }
+  el.innerHTML = state.foodStandards.map(s=>{
+    if(editingStdId === s.id){
+      return `<div class="plate-row plate-row-edit">
+        <input type="text" id="editStdName-${s.id}" value="${escapeHtml(s.name)}" placeholder="Name">
+        <select id="editStdBasis-${s.id}">
+          <option value="per100g" ${s.basis==='per100g'?'selected':''}>per 100g</option>
+          <option value="perUnit" ${s.basis==='perUnit'?'selected':''}>per unit</option>
+        </select>
+        <input type="number" id="editStdKcal-${s.id}" value="${s.kcalBase}" placeholder="kcal">
+        <button class="btn-ghost" onclick="saveEditFoodStandard('${s.id}')">Save</button>
+        <button class="btn-ghost" onclick="cancelEditFoodStandard()">Cancel</button>
+      </div>`;
+    }
+    return `<div class="plate-row">
+      <div class="text">${escapeHtml(s.name)}<span class="meta">${s.kcalBase} kcal ${s.basis==='perUnit' ? 'per unit' : 'per 100g'}</span></div>
+      <button class="plate-add" onclick="quickAddStandard('${s.id}')">+</button>
+      <button class="btn-ghost" onclick="startEditFoodStandard('${s.id}')">Edit</button>
+      <button class="btn-ghost" onclick="deleteFoodStandard('${s.id}')">×</button>
+    </div>`;
+  }).join('');
+}
+
+/* ---------- calorie history calendar ---------- */
+let historyMonth = new Date();
+function shiftHistoryMonth(delta){
+  historyMonth.setMonth(historyMonth.getMonth()+delta);
+  renderCalHistory();
+}
+function dateKeyFor(y,m,d){
+  return y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+}
+function renderCalHistory(){
+  const el = document.getElementById('calHistoryGrid');
+  const label = document.getElementById('calHistoryLabel');
+  if(!el) return;
+  const y = historyMonth.getFullYear(), m = historyMonth.getMonth();
+  if(label) label.textContent = historyMonth.toLocaleDateString(undefined,{month:'long', year:'numeric'});
+  const firstDay = new Date(y,m,1).getDay();
+  const daysInMonth = new Date(y,m+1,0).getDate();
+  let cells = '';
+  for(let i=0;i<firstDay;i++) cells += '<div class="hist-cell empty-cell"></div>';
+  for(let d=1; d<=daysInMonth; d++){
+    const key = dateKeyFor(y,m,d);
+    const entries = state.calories[key]||[];
+    const total = entries.reduce((s,e)=>s+e.kcal,0);
+    const isToday = key===TODAY;
+    cells += `<div class="hist-cell ${isToday?'hist-today':''} ${total?'hist-has':''}">
+      <div class="hist-day">${d}</div>
+      ${total ? `<div class="hist-kcal">${total}</div>` : ''}
+    </div>`;
+  }
+  el.innerHTML = cells;
+}
+
+/* ---------- culture (movies / series / books in one section) ---------- */
+const CULTURE_TYPE_LABELS = {movie:'Movie', series:'Series', book:'Book', music:'Music'};
+const MUSIC_KIND_LABELS = {artist:'Artist', album:'Album', song:'Song'};
+function toggleCultureMusicKind(){
+  const type = document.getElementById('cultureType').value;
+  document.getElementById('cultureMusicKind').style.display = type==='music' ? 'block' : 'none';
+}
+function addCultureItem(){
+  const input = document.getElementById('cultureInput');
+  const typeEl = document.getElementById('cultureType');
+  const musicKindEl = document.getElementById('cultureMusicKind');
+  const title = input.value.trim();
+  if(!title) return;
+  const kind = typeEl.value==='music' ? musicKindEl.value : null;
+  state.culture.push({id:uid(), title, type:typeEl.value, kind, done:false});
+  sset('culture:list', state.culture);
+  input.value='';
+  renderCulture();
+}
+function toggleCultureItem(id){
+  const t = state.culture.find(t=>t.id===id);
+  if(t){ t.done=!t.done; sset('culture:list', state.culture); }
+  renderCulture();
+}
+function deleteCultureItem(id){
+  state.culture = state.culture.filter(t=>t.id!==id);
+  sset('culture:list', state.culture);
+  renderCulture();
+}
+let editingCultureId = null;
+function startEditCulture(id){ editingCultureId = id; renderCulture(); }
+function cancelEditCulture(){ editingCultureId = null; renderCulture(); }
+function toggleEditCultureMusicKind(id){
+  const type = document.getElementById('editCultureType-'+id).value;
+  const el = document.getElementById('editCultureMusicKind-'+id);
+  if(el) el.style.display = type==='music' ? 'block' : 'none';
+}
+function saveEditCulture(id){
+  const t = state.culture.find(t=>t.id===id);
+  if(t){
+    t.title = document.getElementById('editCultureTitle-'+id).value.trim();
+    t.type = document.getElementById('editCultureType-'+id).value;
+    const kindEl = document.getElementById('editCultureMusicKind-'+id);
+    t.kind = t.type==='music' && kindEl ? kindEl.value : null;
+    sset('culture:list', state.culture);
+  }
+  editingCultureId = null;
+  renderCulture();
+}
+function cultureEditFormHTML(t){
+  return `<div class="item" style="flex-direction:column; align-items:stretch; gap:8px;">
+    <input type="text" id="editCultureTitle-${t.id}" value="${escapeHtml(t.title)}" placeholder="Title…">
+    <select id="editCultureType-${t.id}" onchange="toggleEditCultureMusicKind('${t.id}')">
+      <option value="movie" ${t.type==='movie'?'selected':''}>Movie</option>
+      <option value="series" ${t.type==='series'?'selected':''}>Series</option>
+      <option value="book" ${t.type==='book'?'selected':''}>Book</option>
+      <option value="music" ${t.type==='music'?'selected':''}>Music</option>
+    </select>
+    <select id="editCultureMusicKind-${t.id}" style="display:${t.type==='music'?'block':'none'};">
+      <option value="artist" ${t.kind==='artist'?'selected':''}>Artist</option>
+      <option value="album" ${t.kind==='album'?'selected':''}>Album</option>
+      <option value="song" ${t.kind==='song'?'selected':''}>Song</option>
+    </select>
+    <div style="display:flex; gap:8px;">
+      <button class="btn-ghost" onclick="saveEditCulture('${t.id}')">Save</button>
+      <button class="btn-ghost" onclick="cancelEditCulture()">Cancel</button>
+    </div>
+  </div>`;
+}
+function cultureRowHTML(t){
+  const doneWord = t.type==='book' ? 'read' : t.type==='music' ? 'listened' : 'watched';
+  const todoWord = t.type==='book' ? 'to read' : t.type==='music' ? 'to listen' : 'to watch';
+  const typeLabel = t.type==='music' && t.kind ? MUSIC_KIND_LABELS[t.kind] : CULTURE_TYPE_LABELS[t.type];
+  return `<div class="item ${t.done?'done':''}" style="--check-color:var(--c-culture)">
+    <button class="check" onclick="toggleCultureItem('${t.id}')">${t.done?'✓':''}</button>
+    <div class="text">${escapeHtml(t.title)} <span style="color:var(--ink-soft); font-size:12px;">· ${typeLabel}</span></div>
+    <span class="status-pill ${t.done?'done':'todo'}" style="${t.done?`background:var(--c-culture)`:''}">${t.done ? doneWord : todoWord}</span>
+    <button class="btn-ghost" onclick="startEditCulture('${t.id}')">Edit</button>
+    <button class="btn-ghost" onclick="deleteCultureItem('${t.id}')">×</button>
+  </div>`;
+}
+function renderCulture(){
+  ['movie','series','book','music'].forEach(type=>{
+    const el = document.getElementById('cultureList-'+type);
+    if(!el) return;
+    const items = state.culture.filter(t=>t.type===type);
+    if(!items.length){ el.innerHTML = '<div class="empty">Nothing here yet.</div>'; return; }
+    const sorted = [...items].sort((a,b)=> (a.done===b.done) ? 0 : (a.done?1:-1));
+    el.innerHTML = sorted.map(t=> editingCultureId===t.id ? cultureEditFormHTML(t) : cultureRowHTML(t)).join('');
+  });
+}
+
+/* ---------- places to visit ---------- */
+const PLACE_LABELS = {country:'Country', region:'Region / State', city:'City', neighbourhood:'Neighbourhood', landmark:'Landmark', museum:'Museum', restaurant:'Restaurant', park:'Park / Nature', beach:'Beach', other:'Other'};
+function addPlaceItem(){
+  const input = document.getElementById('placeInput');
+  const typeEl = document.getElementById('placeType');
+  const name = input.value.trim();
+  if(!name) return;
+  state.places.push({id:uid(), name, category:typeEl.value, done:false, rating:null});
+  sset('places:list', state.places);
+  input.value='';
+  renderPlaces();
+}
+function togglePlaceItem(id){
+  const t = state.places.find(t=>t.id===id);
+  if(t){ t.done=!t.done; if(!t.done) t.rating=null; sset('places:list', state.places); }
+  renderPlaces();
+}
+function setPlaceRating(id, val){
+  const t = state.places.find(t=>t.id===id);
+  if(t){ t.rating = val ? parseInt(val) : null; sset('places:list', state.places); }
+  renderPlaces();
+}
+function deletePlaceItem(id){
+  state.places = state.places.filter(t=>t.id!==id);
+  sset('places:list', state.places);
+  renderPlaces();
+}
+let editingPlaceId = null;
+function startEditPlace(id){ editingPlaceId = id; renderPlaces(); }
+function cancelEditPlace(){ editingPlaceId = null; renderPlaces(); }
+function saveEditPlace(id){
+  const t = state.places.find(t=>t.id===id);
+  if(t){
+    t.name = document.getElementById('editPlaceName-'+id).value.trim();
+    t.category = document.getElementById('editPlaceCategory-'+id).value;
+    const ratingEl = document.getElementById('editPlaceRating-'+id);
+    if(t.done && ratingEl) t.rating = ratingEl.value ? parseInt(ratingEl.value) : null;
+    sset('places:list', state.places);
+  }
+  editingPlaceId = null;
+  renderPlaces();
+}
+function ratingOptionsHTML(current){
+  let opts = '<option value="">—</option>';
+  for(let i=1;i<=10;i++) opts += `<option value="${i}" ${current===i?'selected':''}>${i}</option>`;
+  return opts;
+}
+function renderPlaces(){
+  const wantEl = document.getElementById('placesWantList');
+  const beenEl = document.getElementById('placesBeenList');
+  const rowHTML = (t)=>{
+    if(editingPlaceId === t.id){
+      const catOptions = Object.entries(PLACE_LABELS).map(([k,v])=>
+        `<option value="${k}" ${t.category===k?'selected':''}>${v}</option>`).join('');
+      return `<div class="item" data-id="${t.id}" style="flex-direction:column; align-items:stretch; gap:8px;">
+        <input type="text" id="editPlaceName-${t.id}" value="${escapeHtml(t.name)}" placeholder="Name…">
+        <select id="editPlaceCategory-${t.id}">${catOptions}</select>
+        ${t.done ? `<select id="editPlaceRating-${t.id}">${ratingOptionsHTML(t.rating)}</select>` : ''}
+        <div style="display:flex; gap:8px;">
+          <button class="btn-ghost" onclick="saveEditPlace('${t.id}')">Save</button>
+          <button class="btn-ghost" onclick="cancelEditPlace()">Cancel</button>
+        </div>
+      </div>`;
+    }
+    return `
+    <div class="item" data-id="${t.id}" style="--check-color:var(--c-places)">
+      <span class="drag-handle place-drag-handle">⠿</span>
+      <div class="text">${escapeHtml(t.name)} <span style="color:var(--ink-soft); font-size:12px;">· ${PLACE_LABELS[t.category]||t.category}</span></div>
+      ${t.done ? `<select onchange="setPlaceRating('${t.id}', this.value)" style="width:auto; padding:4px 6px; font-size:12px;">${ratingOptionsHTML(t.rating)}</select>` : ''}
+      <button class="btn-ghost" onclick="startEditPlace('${t.id}')">Edit</button>
+      <button class="btn-ghost" onclick="deletePlaceItem('${t.id}')">×</button>
+    </div>`;
+  };
+  const want = state.places.filter(p=>!p.done);
+  const been = state.places.filter(p=>p.done);
+  if(wantEl) wantEl.innerHTML = want.length ? want.map(rowHTML).join('') : '<div class="empty">Nowhere queued up yet.</div>';
+  if(beenEl) beenEl.innerHTML = been.length ? been.map(rowHTML).join('') : '<div class="empty">Nothing marked as visited yet.</div>';
+}
+
+/* ---------- drag between Want to go / Been there (pointer events; works on touch + mouse) ---------- */
+let placeDragId = null;
+function pointIsInside(el, x, y){
+  if(!el) return false;
+  const box = el.getBoundingClientRect();
+  return x>=box.left && x<=box.right && y>=box.top && y<=box.bottom;
+}
+function setupPlacesDrag(){
+  document.addEventListener('pointerdown', e=>{
+    const handle = e.target.closest('.place-drag-handle');
+    if(!handle) return;
+    const item = handle.closest('.item');
+    placeDragId = item.dataset.id;
+    item.classList.add('dragging');
+    try{ handle.setPointerCapture(e.pointerId); }catch(err){}
+  });
+  document.addEventListener('pointermove', e=>{
+    if(!placeDragId) return;
+    const dragging = document.querySelector(`.item.dragging[data-id="${placeDragId}"]`);
+    if(!dragging) return;
+    const wantEl = document.getElementById('placesWantList');
+    const beenEl = document.getElementById('placesBeenList');
+    if(pointIsInside(beenEl, e.clientX, e.clientY) && dragging.parentElement !== beenEl){
+      beenEl.appendChild(dragging);
+    } else if(pointIsInside(wantEl, e.clientX, e.clientY) && dragging.parentElement !== wantEl){
+      wantEl.appendChild(dragging);
+    }
+  });
+  const endDrag = ()=>{
+    if(!placeDragId) return;
+    const dragging = document.querySelector(`.item.dragging[data-id="${placeDragId}"]`);
+    if(dragging){
+      dragging.classList.remove('dragging');
+      const nowBeen = dragging.parentElement && dragging.parentElement.id === 'placesBeenList';
+      const t = state.places.find(p=>p.id===placeDragId);
+      if(t){ t.done = nowBeen; if(!nowBeen) t.rating = null; sset('places:list', state.places); }
+    }
+    placeDragId = null;
+    renderPlaces();
+  };
+  document.addEventListener('pointerup', endDrag);
+  document.addEventListener('pointercancel', endDrag);
+}
+
+/* ---------- groceries ---------- */
+function addGroceryItem(){
+  const input = document.getElementById('groceryInput');
+  const name = input.value.trim();
+  if(!name) return;
+  state.groceries.push({id:uid(), name, done:false});
+  sset('groceries:list', state.groceries);
+  input.value='';
+  renderGroceries();
+}
+function toggleGroceryItem(id){
+  const t = state.groceries.find(t=>t.id===id);
+  if(t){ t.done=!t.done; sset('groceries:list', state.groceries); }
+  renderGroceries();
+}
+function deleteGroceryItem(id){
+  state.groceries = state.groceries.filter(t=>t.id!==id);
+  sset('groceries:list', state.groceries);
+  renderGroceries();
+}
+function clearCheckedGroceries(){
+  state.groceries = state.groceries.filter(t=>!t.done);
+  sset('groceries:list', state.groceries);
+  renderGroceries();
+}
+let editingGroceryId = null;
+function startEditGrocery(id){ editingGroceryId = id; renderGroceries(); }
+function cancelEditGrocery(){ editingGroceryId = null; renderGroceries(); }
+function saveEditGrocery(id){
+  const t = state.groceries.find(t=>t.id===id);
+  if(t){
+    t.name = document.getElementById('editGroceryName-'+id).value.trim();
+    sset('groceries:list', state.groceries);
+  }
+  editingGroceryId = null;
+  renderGroceries();
+}
+function renderGroceries(){
+  const el = document.getElementById('groceriesList');
+  if(!el) return;
+  if(!state.groceries.length){ el.innerHTML = '<div class="empty">List is empty.</div>'; return; }
+  const sorted = [...state.groceries].sort((a,b)=> (a.done===b.done) ? 0 : (a.done?1:-1));
+  el.innerHTML = sorted.map(t=>{
+    if(editingGroceryId === t.id){
+      return `<div class="item" style="flex-direction:column; align-items:stretch; gap:8px;">
+        <input type="text" id="editGroceryName-${t.id}" value="${escapeHtml(t.name)}" placeholder="Item name">
+        <div style="display:flex; gap:8px;">
+          <button class="btn-ghost" onclick="saveEditGrocery('${t.id}')">Save</button>
+          <button class="btn-ghost" onclick="cancelEditGrocery()">Cancel</button>
+        </div>
+      </div>`;
+    }
+    return `<div class="item ${t.done?'done':''}" style="--check-color:var(--c-groceries)">
+      <button class="check" onclick="toggleGroceryItem('${t.id}')">${t.done?'✓':''}</button>
+      <div class="text">${escapeHtml(t.name)}</div>
+      <button class="btn-ghost" onclick="startEditGrocery('${t.id}')">Edit</button>
+      <button class="btn-ghost" onclick="deleteGroceryItem('${t.id}')">×</button>
+    </div>`;
+  }).join('');
+}
+
+/* ---------- notes ---------- */
+function addNote(){
+  const titleEl = document.getElementById('noteTitle');
+  const bodyEl = document.getElementById('noteBody');
+  const title = titleEl.value.trim();
+  const body = bodyEl.value.trim();
+  if(!title && !body) return;
+  state.notes.unshift({id:uid(), title, body, ts:Date.now()});
+  sset('notes:list', state.notes);
+  titleEl.value=''; bodyEl.value='';
+  renderNotes();
+}
+let editingNoteId = null;
+function startEditNote(id){
+  editingNoteId = id;
+  renderNotes();
+}
+function cancelEditNote(){
+  editingNoteId = null;
+  renderNotes();
+}
+function saveEditNote(id){
+  const titleEl = document.getElementById('editTitle-'+id);
+  const bodyEl = document.getElementById('editBody-'+id);
+  const n = state.notes.find(n=>n.id===id);
+  if(n){
+    n.title = titleEl.value.trim();
+    n.body = bodyEl.value.trim();
+    sset('notes:list', state.notes);
+  }
+  editingNoteId = null;
+  renderNotes();
+}
+function deleteNote(id){
+  state.notes = state.notes.filter(n=>n.id!==id);
+  sset('notes:list', state.notes);
+  renderNotes();
+}
+function renderNotes(){
+  const el = document.getElementById('notesList');
+  if(!el) return;
+  el.innerHTML = state.notes.length ? state.notes.map(n=>{
+    if(editingNoteId === n.id){
+      return `<div class="note-card">
+        <input type="text" id="editTitle-${n.id}" value="${escapeHtml(n.title)}" placeholder="Title (optional)" style="margin-bottom:8px;">
+        <textarea id="editBody-${n.id}" placeholder="Write something…">${escapeHtml(n.body)}</textarea>
+        <div class="note-actions">
+          <button class="btn-ghost" onclick="saveEditNote('${n.id}')">Save</button>
+          <button class="btn-ghost" onclick="cancelEditNote()">Cancel</button>
+        </div>
+      </div>`;
+    }
+    return `<div class="note-card">
+      ${n.title ? `<div class="note-title">${escapeHtml(n.title)}</div>` : ''}
+      ${n.body ? `<div class="note-body">${escapeHtml(n.body)}</div>` : ''}
+      <div class="note-actions">
+        <button class="btn-ghost" onclick="startEditNote('${n.id}')">Edit</button>
+        <button class="btn-ghost" onclick="deleteNote('${n.id}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('') : '<div class="empty">No notes yet.</div>';
+}
+
+/* ---------- Home: merged upcoming (events, including recurring yearly ones like birthdays) ---------- */
+/* ---------- birthdays (always yearly by nature — separate from Calendar events) ---------- */
+function nextBdayOccurrence(dateStr){
+  const now = new Date(); now.setHours(0,0,0,0);
+  const d = new Date(dateStr+'T00:00:00');
+  let next = new Date(now.getFullYear(), d.getMonth(), d.getDate());
+  if(next < now) next = new Date(now.getFullYear()+1, d.getMonth(), d.getDate());
+  return next;
+}
+function daysUntil(dateStr){
+  const now = new Date(); now.setHours(0,0,0,0);
+  const next = nextBdayOccurrence(dateStr);
+  return Math.round((next-now)/(1000*60*60*24));
+}
+function bdayDateKey(dateStr){
+  const d = nextBdayOccurrence(dateStr);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function addBday(){
+  const nameEl = document.getElementById('bdayName');
+  const dateEl = document.getElementById('bdayDate');
+  const name = nameEl.value.trim();
+  const date = dateEl.value;
+  if(!name || !date) return;
+  state.bdays.push({id:uid(), name, date});
+  sset('bdays:list', state.bdays);
+  nameEl.value=''; dateEl.value='';
+  renderBdays();
+}
+function deleteBday(id){
+  state.bdays = state.bdays.filter(b=>b.id!==id);
+  sset('bdays:list', state.bdays);
+  renderBdays();
+}
+let editingBdayId = null;
+function startEditBday(id){ editingBdayId = id; renderBdays(); }
+function cancelEditBday(){ editingBdayId = null; renderBdays(); }
+function saveEditBday(id){
+  const b = state.bdays.find(b=>b.id===id);
+  if(b){
+    b.name = document.getElementById('editBdayName-'+id).value.trim();
+    b.date = document.getElementById('editBdayDate-'+id).value;
+    sset('bdays:list', state.bdays);
+  }
+  editingBdayId = null;
+  renderBdays();
+}
+function renderBdays(){
+  const sorted = [...state.bdays].sort((a,b)=>daysUntil(a.date)-daysUntil(b.date));
+
+  const fullEl = document.getElementById('bdayListFull');
+  if(fullEl) fullEl.innerHTML = sorted.length ? sorted.map(b=>{
+    if(editingBdayId === b.id){
+      return `<div class="item" style="flex-direction:column; align-items:stretch; gap:8px;">
+        <input type="text" id="editBdayName-${b.id}" value="${escapeHtml(b.name)}" placeholder="Name">
+        <input type="date" id="editBdayDate-${b.id}" value="${b.date}">
+        <div style="display:flex; gap:8px;">
+          <button class="btn-ghost" onclick="saveEditBday('${b.id}')">Save</button>
+          <button class="btn-ghost" onclick="cancelEditBday()">Cancel</button>
+        </div>
+      </div>`;
+    }
+    const d = new Date(b.date+'T00:00:00');
+    const md = d.toLocaleDateString(undefined,{month:'long', day:'numeric'});
+    return `<div class="row">
+      <div class="badge" style="background:var(--c-dates)">🎂</div>
+      <div class="row-info"><b>${escapeHtml(b.name)}</b><span>${md}</span></div>
+      <button class="btn-ghost" onclick="startEditBday('${b.id}')">Edit</button>
+      <button class="btn-ghost" onclick="deleteBday('${b.id}')">×</button>
+    </div>`;
+  }).join('') : '<div class="empty">No birthdays saved yet.</div>';
+
+  // birthdays now surface on Home via Today's events (if today) and Upcoming (next 30 days)
+  renderEvents();
+}
+
+/* ---------- ideas (same principle as notes) ---------- */
+let editingIdeaId = null;
+function addIdea(){
+  const titleEl = document.getElementById('ideaTitle');
+  const bodyEl = document.getElementById('ideaBody');
+  const title = titleEl.value.trim();
+  const body = bodyEl.value.trim();
+  if(!title && !body) return;
+  state.ideas.unshift({id:uid(), title, body, ts:Date.now()});
+  sset('ideas:list', state.ideas);
+  titleEl.value=''; bodyEl.value='';
+  renderIdeas();
+}
+function startEditIdea(id){ editingIdeaId = id; renderIdeas(); }
+function cancelEditIdea(){ editingIdeaId = null; renderIdeas(); }
+function saveEditIdea(id){
+  const idea = state.ideas.find(i=>i.id===id);
+  if(idea){
+    idea.title = document.getElementById('editIdeaTitle-'+id).value.trim();
+    idea.body = document.getElementById('editIdeaBody-'+id).value.trim();
+    sset('ideas:list', state.ideas);
+  }
+  editingIdeaId = null;
+  renderIdeas();
+}
+function deleteIdea(id){
+  state.ideas = state.ideas.filter(i=>i.id!==id);
+  sset('ideas:list', state.ideas);
+  renderIdeas();
+}
+function renderIdeas(){
+  const el = document.getElementById('ideasList');
+  if(!el) return;
+  el.innerHTML = state.ideas.length ? state.ideas.map(idea=>{
+    if(editingIdeaId === idea.id){
+      return `<div class="note-card">
+        <input type="text" id="editIdeaTitle-${idea.id}" value="${escapeHtml(idea.title)}" placeholder="Title (optional)" style="margin-bottom:8px;">
+        <textarea id="editIdeaBody-${idea.id}" placeholder="Write your idea…">${escapeHtml(idea.body)}</textarea>
+        <div class="note-actions">
+          <button class="btn-ghost" onclick="saveEditIdea('${idea.id}')">Save</button>
+          <button class="btn-ghost" onclick="cancelEditIdea()">Cancel</button>
+        </div>
+      </div>`;
+    }
+    return `<div class="note-card">
+      ${idea.title ? `<div class="note-title">${escapeHtml(idea.title)}</div>` : ''}
+      ${idea.body ? `<div class="note-body">${escapeHtml(idea.body)}</div>` : ''}
+      <div class="note-actions">
+        <button class="btn-ghost" onclick="startEditIdea('${idea.id}')">Edit</button>
+        <button class="btn-ghost" onclick="deleteIdea('${idea.id}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('') : '<div class="empty">No ideas yet.</div>';
+}
+
+function renderUpcomingHome(){
+  const el = document.getElementById('upcomingList');
+  if(!el) return;
+  const now = new Date(); now.setHours(0,0,0,0);
+  const eventsWindowEnd = new Date(now); eventsWindowEnd.setDate(eventsWindowEnd.getDate()+14);
+
+  // today's items already appear in the "Today's events" card, so only show future ones here
+  const eventItems = state.events
+    .filter(e=>{ const d = new Date(e.date+'T00:00:00'); return d>now && d<=eventsWindowEnd; })
+    .map(e=>({ type:'event', date:e.date, title:e.title, time:e.time, endTime:e.endTime }));
+
+  const bdayItems = state.bdays
+    .filter(b=>{ const dn = daysUntil(b.date); return dn>0 && dn<=30; })
+    .map(b=>({ type:'birthday', date:bdayDateKey(b.date), title:b.name }));
+
+  const items = [...eventItems, ...bdayItems].sort((a,b)=> (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')));
+
+  if(!items.length){ el.innerHTML = '<div class="empty">Nothing coming up in the next 30 days.</div>'; return; }
+  el.innerHTML = items.map(item=>{
+    const d = new Date(item.date+'T00:00:00');
+    const md = d.toLocaleDateString(undefined,{month:'short', day:'numeric'});
+    const label = item.date===TODAY ? 'Today' : md;
+    if(item.type==='birthday'){
+      return `<div class="row hb-row" onclick="toggleRowExpand(this)">
+        <div class="badge" style="background:var(--c-dates)">🎂</div>
+        <div class="row-info"><b>${escapeHtml(item.title)}</b><span class="hb-detail">${label} · Birthday</span></div>
+      </div>`;
+    }
+    const tm = fmtEventTime(item);
+    return `<div class="row hb-row" onclick="toggleRowExpand(this)">
+      <div class="badge" style="background:var(--c-events)">📅</div>
+      <div class="row-info"><b>${escapeHtml(item.title)}</b><span class="hb-detail">${label}${tm ? ' · '+tm : ''}</span></div>
+    </div>`;
+  }).join('');
+}
+
+/* ---------- Claude API helper ----------
+   Outside the Claude app, this call needs your own Anthropic API key
+   (get one at console.anthropic.com). Paste it below between the quotes.
+   Note: this key would be visible to anyone who views this page's source —
+   fine for a private app only you use, not for anything you'd share publicly. */
+const CLAUDE_API_KEY = '';
+async function callClaude(messages){
+  if(!CLAUDE_API_KEY){
+    throw new Error('NO_API_KEY');
+  }
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": CLAUDE_API_KEY,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true"
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1000,
+      messages: messages
+    })
+  });
+  const data = await response.json();
+  const text = (data.content || [])
+    .map(item => (item.type === "text" ? item.text : ""))
+    .filter(Boolean)
+    .join("\n");
+  return text;
+}
+
+/* ---------- chat ---------- */
+function renderChat(){
+  const el = document.getElementById('chatLog');
+  if(!el) return;
+  el.innerHTML = state.chatHistory.map(m=>`
+    <div class="chat-msg ${m.role}">${escapeHtml(m.content)}</div>`).join('');
+  el.scrollTop = el.scrollHeight;
+}
+async function sendChat(){
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if(!text) return;
+  input.value='';
+  state.chatHistory.push({role:'user', content:text});
+  renderChat();
+  const status = document.getElementById('voiceStatusChat');
+  status.textContent = 'Claude is thinking…';
+  try{
+    const apiMessages = state.chatHistory.map(m=>({role:m.role, content:m.content}));
+    const reply = await callClaude(apiMessages);
+    state.chatHistory.push({role:'assistant', content: reply || "Sorry, I didn't catch that."});
+  }catch(e){
+    const msg = e && e.message === 'NO_API_KEY'
+      ? "Ask Claude isn't set up yet — this needs an Anthropic API key added to the code (see the CLAUDE_API_KEY note near the top of the script) since it's running outside the Claude app now."
+      : 'Something went wrong reaching Claude — try again.';
+    state.chatHistory.push({role:'assistant', content: msg});
+  }
+  status.textContent = '';
+  sset('chat:history', state.chatHistory);
+  renderChat();
+}
+
+/* ---------- voice (Web Speech API) ---------- */
+function getRecognition(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR) return null;
+  const r = new SR();
+  r.lang = 'en-US';
+  r.interimResults = false;
+  r.maxAlternatives = 1;
+  return r;
+}
+function voiceChat(){
+  const btn = document.getElementById('micChat');
+  const status = document.getElementById('voiceStatusChat');
+  const recognition = getRecognition();
+  if(!recognition){ status.textContent = 'Voice input is not supported in this browser.'; return; }
+  btn.classList.add('listening');
+  status.textContent = 'Listening…';
+  recognition.onresult = (e)=>{
+    const transcript = e.results[0][0].transcript;
+    document.getElementById('chatInput').value = transcript;
+    status.textContent = '';
+    btn.classList.remove('listening');
+    sendChat();
+  };
+  recognition.onerror = ()=>{ status.textContent = 'Didn\'t catch that — try again.'; btn.classList.remove('listening'); };
+  recognition.onend = ()=>{ btn.classList.remove('listening'); };
+  recognition.start();
+}
+
+/* ---------- init ---------- */
+async function loadAll(){
+  const migrated = await sget('todos:all', null);
+  if(migrated === null){
+    // one-time migration from the old overall/daily split into a single due-date list
+    const oldOverall = await sget('todos:overall', []);
+    const oldDaily = await sget('todos:daily', {});
+    let merged = oldOverall.map(t=>({id:t.id, text:t.text, done:t.done, dueDate:null}));
+    Object.keys(oldDaily).forEach(dateKey=>{
+      (oldDaily[dateKey]||[]).forEach(t=>{
+        merged.push({id:t.id, text:t.text, done:t.done, dueDate:dateKey});
+      });
+    });
+    state.todos = merged;
+  } else {
+    state.todos = migrated;
+  }
+  // backfill order/asap for any todos saved before those fields existed
+  let needsResave = migrated === null;
+  state.todos.forEach((t, idx)=>{
+    if(t.order === undefined){ t.order = idx; needsResave = true; }
+    if(t.asap === undefined){ t.asap = false; needsResave = true; }
+  });
+  if(needsResave) await sset('todos:all', state.todos);
+
+  state.calories      = await sget('cal:log', {});
+  state.calGoal        = await sget('cal:goal', 2000);
+  state.foodStandards   = await sget('food:standards', []);
+
+  const migratedCulture = await sget('culture:list', null);
+  if(migratedCulture === null){
+    // one-time migration: old watchlist -> "movie" (re-tag any Series manually), old books -> "book"
+    const oldWatch = await sget('list:watch', []);
+    const oldBooks = await sget('list:books', []);
+    const mergedCulture = [
+      ...oldWatch.map(t=>({id:t.id, title:t.title, type:'movie', done:t.done})),
+      ...oldBooks.map(t=>({id:t.id, title:t.title, type:'book', done:t.done})),
+    ];
+    state.culture = mergedCulture;
+    await sset('culture:list', mergedCulture);
+  } else {
+    state.culture = migratedCulture;
+  }
+  state.places               = await sget('places:list', []);
+  state.groceries          = await sget('groceries:list', []);
+  state.notes               = await sget('notes:list', []);
+  state.events                  = await sget('events:list', []);
+
+  const bdaysSplit = await sget('migrated:events_bdays_split', false);
+  if(!bdaysSplit){
+    // undo the earlier merge: pull any birthday-tagged events back into their own list
+    const bdayEvents = state.events.filter(e=>e.category==='birthday');
+    const existingBdays = await sget('bdays:list', []);
+    const pulledBdays = bdayEvents.map(e=>({id:e.id, name:e.title, date:e.date}));
+    state.bdays = [...existingBdays, ...pulledBdays];
+    state.events = state.events.filter(e=>e.category!=='birthday');
+    await sset('bdays:list', state.bdays);
+    await sset('events:list', state.events);
+    await sset('migrated:events_bdays_split', true);
+  } else {
+    state.bdays = await sget('bdays:list', []);
+  }
+  state.ideas = await sget('ideas:list', []);
+
+  const storedTabOrder = await sget('tabs:order', null);
+  if(storedTabOrder){ tabOrder = storedTabOrder; buildTabstrip(); }
+
+  state.chatHistory                = await sget('chat:history', []);
+  renderAll();
+}
+function renderAll(){
+  document.getElementById('todayDate').textContent = fmtDateHeader();
+  document.getElementById('greeting').textContent = greetingText();
+  renderTodayTodos();
+  renderTodoList();
+  renderCalories();
+  renderFoodStandards();
+  renderCalHistory();
+  renderCulture();
+  renderPlaces();
+  renderGroceries();
+  renderNotes();
+  renderIdeas();
+  renderEvents();
+  renderBdays();
+  renderChat();
+}
+
+buildTabstrip();
+buildSectionShells();
+renderAssistantFields();
+setupTodoDrag();
+setupPlacesDrag();
+setupTabDrag();
+loadAll();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('./sw.js').catch(err=>console.error('SW registration failed', err));
+  });
+}
+</script>
+</body>
+</html>
