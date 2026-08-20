@@ -44,6 +44,7 @@
   html,body{margin:0;padding:0;background:var(--cream);color:var(--ink);height:100%;font-family:'Inter',sans-serif;}
   body{min-height:100vh; padding-bottom:24px;}
   .num{font-family:'JetBrains Mono',monospace;}
+  .ring-label .num{font-family:'Inter',sans-serif;} /* JetBrains Mono draws '0' with a dot inside it by design — avoid that here */
   h1,h2,h3{font-family:'Fraunces',serif; margin:0;}
 
   header.top{
@@ -505,7 +506,6 @@ function buildSectionShells(){
     <div class="card" style="--spine:var(--c-events)">
       <h2>Upcoming</h2>
       <div id="eventsListFull"></div>
-      <button class="btn-ghost" style="margin-top:8px;" onclick="exportCalendarIcs()">⬇ Export calendar (.ics) — import into Google Calendar</button>
     </div>
     <div class="card" style="--spine:var(--c-events)">
       <h2>Browse calendar</h2>
@@ -545,8 +545,8 @@ function buildSectionShells(){
         </select>
         <input type="text" id="foodName" placeholder="Food name">
         <div style="display:flex; gap:8px;">
-          <input type="number" id="foodQty" placeholder="Quantity" style="flex:1" oninput="recomputeFoodKcal()">
-          <select id="foodUnit" style="flex:1" onchange="recomputeFoodKcal()">
+          <input type="number" id="foodQty" placeholder="Quantity" style="flex:1">
+          <select id="foodUnit" style="flex:1">
             <option value="g">grams</option>
             <option value="unit">units</option>
           </select>
@@ -1432,51 +1432,6 @@ function googleCalLink(e){
   const params = new URLSearchParams({ action:'TEMPLATE', text:e.title, dates:datesParam });
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
-function icsEscape(text){
-  return String(text).replace(/[\\,;]/g, m=>'\\'+m).replace(/\n/g,'\\n');
-}
-function exportCalendarIcs(){
-  const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Chronitical//EN','CALSCALE:GREGORIAN'];
-  state.events.forEach(e=>{
-    const dateStr = e.date.replace(/-/g,'');
-    lines.push('BEGIN:VEVENT');
-    lines.push('UID:'+e.id+'@chronitical');
-    lines.push('DTSTAMP:'+dateStr+'T000000Z');
-    if(e.time){
-      lines.push('DTSTART:'+dateStr+'T'+e.time.replace(':','')+'00');
-      lines.push('DTEND:'+dateStr+'T'+(e.endTime||e.time).replace(':','')+'00');
-    } else {
-      const d = new Date(e.date+'T00:00:00');
-      const next = new Date(d); next.setDate(next.getDate()+1);
-      const nextStr = dateKeyFor(next.getFullYear(), next.getMonth(), next.getDate()).replace(/-/g,'');
-      lines.push('DTSTART;VALUE=DATE:'+dateStr);
-      lines.push('DTEND;VALUE=DATE:'+nextStr);
-    }
-    lines.push('SUMMARY:'+icsEscape(e.title));
-    lines.push('END:VEVENT');
-  });
-  state.bdays.forEach(b=>{
-    const dateStr = b.date.replace(/-/g,'');
-    const d = new Date(b.date+'T00:00:00');
-    const next = new Date(d); next.setDate(next.getDate()+1);
-    const nextStr = dateKeyFor(next.getFullYear(), next.getMonth(), next.getDate()).replace(/-/g,'');
-    lines.push('BEGIN:VEVENT');
-    lines.push('UID:'+b.id+'@chronitical');
-    lines.push('DTSTAMP:'+dateStr+'T000000Z');
-    lines.push('DTSTART;VALUE=DATE:'+dateStr);
-    lines.push('DTEND;VALUE=DATE:'+nextStr);
-    lines.push('RRULE:FREQ=YEARLY');
-    lines.push('SUMMARY:'+icsEscape(b.name+"'s birthday"));
-    lines.push('END:VEVENT');
-  });
-  lines.push('END:VCALENDAR');
-  const blob = new Blob([lines.join('\r\n')], {type:'text/calendar'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'chronitical-calendar.ics';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
 function searchEvents(){
   const q = document.getElementById('eventSearchInput').value.trim().toLowerCase();
   const el = document.getElementById('eventSearchResults');
@@ -1501,19 +1456,11 @@ function applyStandardToForm(){
   if(!id) return;
   const s = state.foodStandards.find(s=>s.id===id);
   if(!s) return;
+  // fill in exactly what was recorded when this plate was saved — no scaling
   document.getElementById('foodName').value = s.name;
-  document.getElementById('foodUnit').value = s.basis==='perUnit' ? 'unit' : 'g';
-  document.getElementById('foodQty').value = s.basis==='perUnit' ? 1 : 100;
-  recomputeFoodKcal();
-}
-function recomputeFoodKcal(){
-  const id = document.getElementById('foodStandardSelect').value;
-  if(!id) return; // no standard selected: kcal stays manual
-  const s = state.foodStandards.find(s=>s.id===id);
-  if(!s) return;
-  const qty = parseFloat(document.getElementById('foodQty').value) || 0;
-  const kcal = s.basis==='perUnit' ? Math.round(s.kcalBase * qty) : Math.round(s.kcalBase * qty/100);
-  document.getElementById('foodCal').value = kcal;
+  document.getElementById('foodUnit').value = s.unit;
+  document.getElementById('foodQty').value = s.qty;
+  document.getElementById('foodCal').value = s.kcal;
 }
 function addCalorie(){
   const nameEl = document.getElementById('foodName');
@@ -1534,9 +1481,7 @@ function addCalorie(){
   sset('cal:log', state.calories);
 
   if(saveStdEl.checked && qty){
-    const basis = unit==='unit' ? 'perUnit' : 'per100g';
-    const kcalBase = basis==='perUnit' ? Math.round(kcal/qty) : Math.round(kcal/qty*100);
-    state.foodStandards.push({id:uid(), name, basis, kcalBase});
+    state.foodStandards.push({id:uid(), name, qty, unit, kcal});
     sset('food:standards', state.foodStandards);
     renderFoodStandards();
   }
@@ -1621,29 +1566,12 @@ function renderCalories(){
     const frac = Math.max(0, Math.min(total/goal, 1));
     ringEl.style.strokeDasharray = `${circumference}`;
     ringEl.style.strokeDashoffset = `${circumference*(1-frac)}`;
-    // a round linecap on a zero-length arc still renders as a dot — avoid that
-    ringEl.setAttribute('stroke-linecap', frac > 0 ? 'round' : 'butt');
   }
   if(ringTextEl) ringTextEl.textContent = total;
   if(ringGoalEl) ringGoalEl.textContent = goal;
 }
 
 /* ---------- key plates (reusable standard foods) ---------- */
-function addFoodStandard(){
-  const nameEl = document.getElementById('stdName');
-  const basisEl = document.getElementById('stdBasis');
-  const kcalEl = document.getElementById('stdKcal');
-  const name = nameEl.value.trim();
-  const kcalBase = parseInt(kcalEl.value);
-  if(!name || !kcalBase){
-    alert('Enter both a name and a kcal value to save a key plate.');
-    return;
-  }
-  state.foodStandards.push({id:uid(), name, basis:basisEl.value, kcalBase});
-  sset('food:standards', state.foodStandards);
-  nameEl.value=''; kcalEl.value='';
-  renderFoodStandards();
-}
 function deleteFoodStandard(id){
   state.foodStandards = state.foodStandards.filter(s=>s.id!==id);
   sset('food:standards', state.foodStandards);
@@ -1652,9 +1580,8 @@ function deleteFoodStandard(id){
 function quickAddStandard(id){
   const s = state.foodStandards.find(s=>s.id===id);
   if(!s) return;
-  const qty = s.basis==='perUnit' ? 1 : 100;
   if(!state.calories[TODAY]) state.calories[TODAY]=[];
-  state.calories[TODAY].push({id:uid(), name:s.name, kcal:s.kcalBase, qty, unit: s.basis==='perUnit'?'unit':'g'});
+  state.calories[TODAY].push({id:uid(), name:s.name, kcal:s.kcal, qty:s.qty, unit:s.unit});
   sset('cal:log', state.calories);
   renderCalories();
   renderCalHistory();
@@ -1666,8 +1593,11 @@ function saveEditFoodStandard(id){
   const s = state.foodStandards.find(s=>s.id===id);
   if(s){
     s.name = document.getElementById('editStdName-'+id).value.trim();
-    s.basis = document.getElementById('editStdBasis-'+id).value;
-    s.kcalBase = parseInt(document.getElementById('editStdKcal-'+id).value) || s.kcalBase;
+    const qtyVal = parseFloat(document.getElementById('editStdQty-'+id).value);
+    s.qty = isNaN(qtyVal) ? s.qty : qtyVal;
+    s.unit = document.getElementById('editStdUnit-'+id).value;
+    const kcalVal = parseInt(document.getElementById('editStdKcal-'+id).value);
+    s.kcal = isNaN(kcalVal) ? s.kcal : kcalVal;
     sset('food:standards', state.foodStandards);
   }
   editingStdId = null;
@@ -1688,17 +1618,18 @@ function renderFoodStandards(){
     if(editingStdId === s.id){
       return `<div class="plate-row plate-row-edit">
         <input type="text" id="editStdName-${s.id}" value="${escapeHtml(s.name)}" placeholder="Name">
-        <select id="editStdBasis-${s.id}">
-          <option value="per100g" ${s.basis==='per100g'?'selected':''}>per 100g</option>
-          <option value="perUnit" ${s.basis==='perUnit'?'selected':''}>per unit</option>
+        <input type="number" id="editStdQty-${s.id}" value="${s.qty}" placeholder="Quantity">
+        <select id="editStdUnit-${s.id}">
+          <option value="g" ${s.unit==='g'?'selected':''}>grams</option>
+          <option value="unit" ${s.unit==='unit'?'selected':''}>units</option>
         </select>
-        <input type="number" id="editStdKcal-${s.id}" value="${s.kcalBase}" placeholder="kcal">
+        <input type="number" id="editStdKcal-${s.id}" value="${s.kcal}" placeholder="kcal">
         <button class="btn-ghost" onclick="saveEditFoodStandard('${s.id}')">Save</button>
         <button class="btn-ghost" onclick="cancelEditFoodStandard()">Cancel</button>
       </div>`;
     }
     return `<div class="plate-row">
-      <div class="text">${escapeHtml(s.name)}<span class="meta">${s.kcalBase} kcal ${s.basis==='perUnit' ? 'per unit' : 'per 100g'}</span></div>
+      <div class="text">${escapeHtml(s.name)}<span class="meta">${s.qty}${s.unit==='unit'?' unit'+(s.qty===1?'':'s'):'g'} · ${s.kcal} kcal</span></div>
       <button class="plate-add" onclick="quickAddStandard('${s.id}')">+</button>
       <button class="btn-ghost" onclick="startEditFoodStandard('${s.id}')">Edit</button>
       <button class="btn-ghost" onclick="deleteFoodStandard('${s.id}')">×</button>
@@ -1833,7 +1764,7 @@ function cultureRowHTML(t){
   </div>`;
 }
 function renderCulture(){
-  ['movie','series','book','music'].forEach(type=>{
+  ['movie','series','book','music','app','website'].forEach(type=>{
     const el = document.getElementById('cultureList-'+type);
     if(!el) return;
     const items = state.culture.filter(t=>t.type===type);
