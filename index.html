@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Chronitical">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.workers.dev; base-uri 'self'; form-action 'self'; object-src 'none'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -61,12 +61,12 @@
     position:sticky; top:78px; z-index:5; background:var(--cream);
   }
   .tabchip{
-    flex:0 0 auto; display:flex; align-items:center; gap:5px;
+    flex:0 0 auto; display:flex; align-items:center; gap:6px;
     background:var(--paper); border:1px solid var(--line); border-radius:999px;
-    padding:6px 10px 6px 8px; font-size:11.5px; font-weight:600; color:var(--ink-soft);
+    padding:8px 16px 8px 12px; font-size:12.5px; font-weight:600; color:var(--ink-soft);
     white-space:nowrap;
   }
-  .tabchip .dot{width:6px; height:6px; border-radius:50%; flex-shrink:0;}
+  .tabchip .dot{width:7px; height:7px; border-radius:50%; flex-shrink:0;}
   .tabchip.active{color:var(--ink); border-color:transparent; box-shadow:0 1px 3px rgba(46,42,34,0.08), 0 0 0 1.5px var(--chip-color) inset;}
   .tabchip-main{border:2px solid var(--chip-color); font-weight:800;}
   .tabchip-main.active{box-shadow:0 1px 3px rgba(46,42,34,0.08), 0 0 0 2.5px var(--chip-color) inset;}
@@ -149,10 +149,12 @@
   .log-item .meta{color:var(--ink-soft); font-size:12px;}
 
   .cal-history-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:5px;}
-  .hist-cell{aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:9px; background:var(--cream); font-size:11px;}
+  .hist-cell{aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:9px; background:var(--cream); font-size:11px; cursor:pointer;}
+  .hist-activity{font-size:10px; margin-top:1px; line-height:1;}
   .hist-cell.empty-cell{background:transparent;}
   .hist-cell.hist-has{background:rgba(180,80,106,0.12);}
   .hist-cell.hist-today{border:1.5px solid var(--c-cal);}
+  .hist-cell.hist-selected{outline:2px solid var(--c-events); outline-offset:-2px;}
   .hist-day{font-weight:600; color:var(--ink);}
   .hist-kcal{font-family:'JetBrains Mono',monospace; font-size:9.5px; color:var(--c-cal); margin-top:2px;}
 
@@ -183,6 +185,14 @@
   .mic-btn.listening{ background:var(--mic-color, var(--c-cal)); color:#fff; border-color:transparent; animation:pulse 1.1s infinite; }
   @keyframes pulse{ 0%{box-shadow:0 0 0 0 rgba(180,80,106,0.4);} 70%{box-shadow:0 0 0 10px rgba(180,80,106,0);} 100%{box-shadow:0 0 0 0 rgba(180,80,106,0);} }
   .voice-status{font-size:12.5px; color:var(--ink-soft); margin-top:8px; min-height:16px;}
+
+  /* chat */
+  .chat-log{display:flex; flex-direction:column; gap:10px; margin-bottom:4px;}
+  .chat-msg{max-width:82%; padding:10px 13px; border-radius:14px; font-size:14.5px; line-height:1.4;}
+  .chat-msg.user{align-self:flex-end; background:var(--c-chat); color:#fff; border-bottom-right-radius:4px;}
+  .chat-msg.assistant{align-self:flex-start; background:var(--cream); border:1px solid var(--line); border-bottom-left-radius:4px;}
+  .chat-input-row{display:flex; gap:8px; align-items:flex-end; margin-top:10px;}
+  .chat-note{font-size:12px; color:var(--ink-faint); margin-bottom:10px; line-height:1.5;}
 
   .assistant-fab{
     position:fixed; top:16px; right:16px; z-index:200;
@@ -225,9 +235,9 @@
         <option value="todo">To-do</option>
         <option value="event">Calendar</option>
         <option value="birthday">Birthdays</option>
-        <option value="cal">Calories</option>
-        <option value="culture">Culture</option>
-        <option value="grocery">Groceries</option>
+        <option value="cal">Health</option>
+        <option value="culture">Culture/Media</option>
+        <option value="grocery">Shopping</option>
         <option value="place">Location</option>
         <option value="idea">Ideas</option>
         <option value="note">Other</option>
@@ -275,12 +285,13 @@ const SECTIONS = [
   {id:'todo',   label:'To-do',     color:'var(--c-todo)'},
   {id:'events', label:'Calendar',  color:'var(--c-events)'},
   {id:'dates',  label:'Birthdays', color:'var(--c-dates)'},
-  {id:'cal',    label:'Calories',  color:'var(--c-cal)'},
-  {id:'culture',label:'Culture',   color:'var(--c-culture)'},
+  {id:'cal',    label:'Health',    color:'var(--c-cal)'},
+  {id:'culture',label:'Culture/Media',color:'var(--c-culture)'},
   {id:'places', label:'Location',  color:'var(--c-places)'},
-  {id:'groceries',label:'Groceries',color:'var(--c-groceries)'},
+  {id:'groceries',label:'Shopping',color:'var(--c-groceries)'},
   {id:'notes',  label:'Other',     color:'var(--c-notes)'},
   {id:'ideas',  label:'Ideas',     color:'var(--c-ideas)'},
+  {id:'chat',   label:'Assistant', color:'var(--c-chat)'},
 ];
 
 function todayKey(){
@@ -346,7 +357,7 @@ let state = {
   todos: [],
   calories: {}, calGoal: 2000, foodStandards: [],
   culture: [], places: [], groceries: [], notes: [], ideas: [], bdays: [],
-  events: []
+  events: [], chatHistory: [], activities: {}
 };
 
 let tabOrder = SECTIONS.filter(s=>s.id!=='today').map(s=>s.id);
@@ -445,7 +456,7 @@ function buildSectionShells(){
     <div class="card" style="--spine:var(--c-cal)">
       <h2>Calories today</h2>
       <div class="rings">
-        <div class="ring-card">
+        <div class="ring-card" onclick="handleTabClick('cal')" style="cursor:pointer;">
           <div class="ring-wrap">
             <svg width="112" height="112">
               <circle cx="56" cy="56" r="46" stroke="#E9E0CC" stroke-width="9" fill="none"/>
@@ -494,6 +505,19 @@ function buildSectionShells(){
     <div class="card" style="--spine:var(--c-events)">
       <h2>Upcoming</h2>
       <div id="eventsListFull"></div>
+      <button class="btn-ghost" style="margin-top:8px;" onclick="exportCalendarIcs()">⬇ Export calendar (.ics) — import into Google Calendar</button>
+    </div>
+    <div class="card" style="--spine:var(--c-events)">
+      <h2>Browse calendar</h2>
+      <input type="text" id="eventSearchInput" placeholder="Search events by title…" oninput="searchEvents()" style="margin-bottom:12px;">
+      <div id="eventSearchResults"></div>
+      <div id="eventsCalNav" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+        <button class="btn-ghost" onclick="shiftEventsCalMonth(-1)">‹</button>
+        <span id="eventsCalLabel" style="font-weight:600;"></span>
+        <button class="btn-ghost" onclick="shiftEventsCalMonth(1)">›</button>
+      </div>
+      <div class="cal-history-grid" id="eventsCalGrid"></div>
+      <div id="eventsCalDayDetail" style="margin-top:12px;"></div>
     </div>
   </section>
 
@@ -554,6 +578,7 @@ function buildSectionShells(){
         <button class="btn-ghost" onclick="shiftHistoryMonth(1)">›</button>
       </div>
       <div class="cal-history-grid" id="calHistoryGrid"></div>
+      <div style="font-size:11px; color:var(--ink-soft); margin-top:8px;">Tap a day to cycle 💪 gym / 🏃 run / both / none</div>
     </div>
 
     <div class="card" style="--spine:var(--c-cal)">
@@ -565,7 +590,7 @@ function buildSectionShells(){
 
   <section id="sec-culture">
     <div class="card" style="--spine:var(--c-culture)">
-      <h2>Add to Culture</h2>
+      <h2>Add to Culture/Media</h2>
       <div class="add-row" style="flex-direction:column; gap:8px;">
         <input type="text" id="cultureInput" placeholder="Title…">
         <select id="cultureType" onchange="toggleCultureMusicKind()">
@@ -573,6 +598,8 @@ function buildSectionShells(){
           <option value="series">Series</option>
           <option value="book">Book</option>
           <option value="music">Music</option>
+          <option value="app">App</option>
+          <option value="website">Website</option>
         </select>
         <select id="cultureMusicKind" style="display:none;">
           <option value="artist">Artist</option>
@@ -597,6 +624,14 @@ function buildSectionShells(){
     <div class="card" style="--spine:var(--c-culture)">
       <h2>Music</h2>
       <div id="cultureList-music"></div>
+    </div>
+    <div class="card" style="--spine:var(--c-culture)">
+      <h2>Apps</h2>
+      <div id="cultureList-app"></div>
+    </div>
+    <div class="card" style="--spine:var(--c-culture)">
+      <h2>Websites</h2>
+      <div id="cultureList-website"></div>
     </div>
   </section>
 
@@ -635,7 +670,7 @@ function buildSectionShells(){
     <div class="card" style="--spine:var(--c-groceries)">
       <h2>Add item</h2>
       <div class="add-row">
-        <input type="text" id="groceryInput" placeholder="e.g. milk">
+        <input type="text" id="groceryInput" placeholder="e.g. milk, razors, batteries…">
         <button class="btn" style="--btn-color:var(--c-groceries)" onclick="addGroceryItem()">Add</button>
       </div>
     </div>
@@ -673,6 +708,20 @@ function buildSectionShells(){
     <div class="card" style="--spine:var(--c-ideas)">
       <h2>Your ideas</h2>
       <div id="ideasList"></div>
+    </div>
+  </section>
+
+  <section id="sec-chat">
+    <div class="card" style="--spine:var(--c-chat)">
+      <h2>Assistant</h2>
+      <div class="chat-note">A general chat assistant — runs on a free open-source AI model via a small Cloudflare Worker, not Claude itself. It can't see or edit your Chronitical data. Fresh conversation each time you reload.</div>
+      <div class="chat-log" id="chatLog"></div>
+      <div class="chat-input-row">
+        <input type="text" id="chatInput" placeholder="Type or use the mic…" onkeydown="if(event.key==='Enter') sendChat()">
+        <button class="mic-btn" id="micChat" style="--mic-color:var(--c-chat)" onclick="voiceChat()">🎙️</button>
+        <button class="btn" style="--btn-color:var(--c-chat)" onclick="sendChat()">Send</button>
+      </div>
+      <div class="voice-status" id="voiceStatusChat"></div>
     </div>
   </section>
   `;
@@ -734,6 +783,79 @@ function voiceAssistant(){
     assistantStatus('Could not start voice input — try again.');
   }
 }
+
+/* ---------- Assistant chat — talks to a free Cloudflare Worker, not Claude directly ----------
+   Fill these in once you've deployed the Worker (see the setup notes it came with). */
+const WORKER_URL = '';       // e.g. 'https://chronitical-ai.yourname.workers.dev'
+const CHRONITICAL_APP_TOKEN = ''; // must match APP_TOKEN set in the Worker
+
+async function callAssistant(messages){
+  if(!WORKER_URL || !CHRONITICAL_APP_TOKEN){
+    throw new Error('NOT_CONFIGURED');
+  }
+  const response = await fetch(WORKER_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-App-Token': CHRONITICAL_APP_TOKEN,
+    },
+    body: JSON.stringify({ messages }),
+  });
+  if(!response.ok){
+    throw new Error('REQUEST_FAILED');
+  }
+  const data = await response.json();
+  return data.reply || '';
+}
+function renderChat(){
+  const el = document.getElementById('chatLog');
+  if(!el) return;
+  el.innerHTML = state.chatHistory.map(m=>`
+    <div class="chat-msg ${m.role}">${escapeHtml(m.content)}</div>`).join('');
+  el.scrollTop = el.scrollHeight;
+}
+async function sendChat(){
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if(!text) return;
+  input.value='';
+  state.chatHistory.push({role:'user', content:text});
+  renderChat();
+  const status = document.getElementById('voiceStatusChat');
+  status.textContent = 'Thinking…';
+  try{
+    const apiMessages = state.chatHistory.map(m=>({role:m.role, content:m.content}));
+    const reply = await callAssistant(apiMessages);
+    state.chatHistory.push({role:'assistant', content: reply || "Sorry, I didn't catch that."});
+  }catch(e){
+    const msg = e && e.message === 'NOT_CONFIGURED'
+      ? "The assistant isn't set up yet — deploy the Cloudflare Worker and fill in WORKER_URL and CHRONITICAL_APP_TOKEN near the top of the script."
+      : 'Something went wrong reaching the assistant — try again.';
+    state.chatHistory.push({role:'assistant', content: msg});
+  }
+  status.textContent = '';
+  sset('chat:history', state.chatHistory);
+  renderChat();
+}
+function voiceChat(){
+  const btn = document.getElementById('micChat');
+  const status = document.getElementById('voiceStatusChat');
+  const recognition = getRecognition(false);
+  if(!recognition){ status.textContent = 'Voice input is not supported in this browser.'; return; }
+  btn.classList.add('listening');
+  status.textContent = 'Listening…';
+  recognition.onresult = (e)=>{
+    const transcript = e.results[0][0].transcript;
+    document.getElementById('chatInput').value = transcript;
+    status.textContent = '';
+    btn.classList.remove('listening');
+    sendChat();
+  };
+  recognition.onerror = ()=>{ status.textContent = "Didn't catch that — try again."; btn.classList.remove('listening'); };
+  recognition.onend = ()=>{ btn.classList.remove('listening'); };
+  recognition.start();
+}
+
 function parseRelativeDate(text){
   const t = text.toLowerCase();
   const now = new Date();
@@ -1210,6 +1332,7 @@ function renderEvents(){
     return `<div class="row">
       <div class="badge" style="background:var(--c-events)">${md.split(' ')[0].slice(0,3)}</div>
       <div class="row-info"><b>${escapeHtml(e.title)}</b><span>${md}${tm ? ' · '+tm : ''}</span></div>
+      <a class="btn-ghost" href="${googleCalLink(e)}" target="_blank" rel="noopener" title="Add to Google Calendar">📆</a>
       <button class="btn-ghost" onclick="startEditEvent('${e.id}')">Edit</button>
       <button class="btn-ghost" onclick="deleteEvent('${e.id}')">×</button>
     </div>`;
@@ -1236,6 +1359,140 @@ function renderEvents(){
   if(todayEl) todayEl.innerHTML = todayItemsHTML.length ? todayItemsHTML.join('') : '<div class="empty">Nothing on the calendar today.</div>';
 
   renderUpcomingHome();
+  renderEventsCal();
+}
+
+/* ---------- browsable calendar (search + month grid across any day/month/year) ---------- */
+let eventsCalMonth = new Date();
+let selectedCalDay = null;
+function shiftEventsCalMonth(delta){
+  eventsCalMonth.setMonth(eventsCalMonth.getMonth()+delta);
+  selectedCalDay = null;
+  renderEventsCal();
+}
+function showEventsForDay(key){
+  selectedCalDay = (selectedCalDay===key) ? null : key;
+  renderEventsCal();
+}
+function renderEventsCal(){
+  const grid = document.getElementById('eventsCalGrid');
+  const label = document.getElementById('eventsCalLabel');
+  if(!grid) return;
+  const y = eventsCalMonth.getFullYear(), m = eventsCalMonth.getMonth();
+  if(label) label.textContent = eventsCalMonth.toLocaleDateString(undefined,{month:'long', year:'numeric'});
+  const firstDay = new Date(y,m,1).getDay();
+  const daysInMonth = new Date(y,m+1,0).getDate();
+  const byDay = {};
+  state.events.forEach(e=>{ (byDay[e.date] = byDay[e.date]||[]).push(e); });
+  state.bdays.forEach(b=>{ const k = bdayDateKey(b.date); if(new Date(k+'T00:00:00').getFullYear()===y || true){ (byDay[k] = byDay[k]||[]).push({title:b.name, time:null, isBday:true}); } });
+
+  let cells = '';
+  for(let i=0;i<firstDay;i++) cells += '<div class="hist-cell empty-cell"></div>';
+  for(let d=1; d<=daysInMonth; d++){
+    const key = dateKeyFor(y,m,d);
+    const items = byDay[key]||[];
+    const isToday = key===TODAY;
+    const isSelected = key===selectedCalDay;
+    cells += `<div class="hist-cell ${isToday?'hist-today':''} ${items.length?'hist-has':''} ${isSelected?'hist-selected':''}" onclick="showEventsForDay('${key}')">
+      <div class="hist-day">${d}</div>
+      ${items.length ? `<div class="hist-kcal">${items.length===1?'•':items.length}</div>` : ''}
+    </div>`;
+  }
+  grid.innerHTML = cells;
+
+  const detailEl = document.getElementById('eventsCalDayDetail');
+  if(detailEl){
+    if(!selectedCalDay){ detailEl.innerHTML = ''; }
+    else{
+      const items = byDay[selectedCalDay]||[];
+      const d = new Date(selectedCalDay+'T00:00:00');
+      const dateLabel = d.toLocaleDateString(undefined,{weekday:'long', month:'long', day:'numeric'});
+      detailEl.innerHTML = `<div style="font-weight:600; font-size:13px; margin-bottom:8px;">${dateLabel}</div>` + (items.length ? items.map(it=>`
+        <div class="row">
+          <div class="badge" style="background:${it.isBday?'var(--c-dates)':'var(--c-events)'}">${it.isBday?'🎂':'📅'}</div>
+          <div class="row-info"><b>${escapeHtml(it.title)}</b>${it.time ? `<span>${it.time}</span>` : ''}</div>
+        </div>`).join('') : '<div class="empty">Nothing that day.</div>');
+    }
+  }
+}
+/* ---------- Google Calendar sharing ---------- */
+function googleCalLink(e){
+  const dateStr = e.date.replace(/-/g,'');
+  let datesParam;
+  if(e.time){
+    const startHM = e.time.replace(':','');
+    const endHM = (e.endTime || e.time).replace(':','');
+    datesParam = `${dateStr}T${startHM}00/${dateStr}T${endHM}00`;
+  } else {
+    const d = new Date(e.date+'T00:00:00');
+    const next = new Date(d); next.setDate(next.getDate()+1);
+    const nextStr = dateKeyFor(next.getFullYear(), next.getMonth(), next.getDate()).replace(/-/g,'');
+    datesParam = `${dateStr}/${nextStr}`;
+  }
+  const params = new URLSearchParams({ action:'TEMPLATE', text:e.title, dates:datesParam });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+function icsEscape(text){
+  return String(text).replace(/[\\,;]/g, m=>'\\'+m).replace(/\n/g,'\\n');
+}
+function exportCalendarIcs(){
+  const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Chronitical//EN','CALSCALE:GREGORIAN'];
+  state.events.forEach(e=>{
+    const dateStr = e.date.replace(/-/g,'');
+    lines.push('BEGIN:VEVENT');
+    lines.push('UID:'+e.id+'@chronitical');
+    lines.push('DTSTAMP:'+dateStr+'T000000Z');
+    if(e.time){
+      lines.push('DTSTART:'+dateStr+'T'+e.time.replace(':','')+'00');
+      lines.push('DTEND:'+dateStr+'T'+(e.endTime||e.time).replace(':','')+'00');
+    } else {
+      const d = new Date(e.date+'T00:00:00');
+      const next = new Date(d); next.setDate(next.getDate()+1);
+      const nextStr = dateKeyFor(next.getFullYear(), next.getMonth(), next.getDate()).replace(/-/g,'');
+      lines.push('DTSTART;VALUE=DATE:'+dateStr);
+      lines.push('DTEND;VALUE=DATE:'+nextStr);
+    }
+    lines.push('SUMMARY:'+icsEscape(e.title));
+    lines.push('END:VEVENT');
+  });
+  state.bdays.forEach(b=>{
+    const dateStr = b.date.replace(/-/g,'');
+    const d = new Date(b.date+'T00:00:00');
+    const next = new Date(d); next.setDate(next.getDate()+1);
+    const nextStr = dateKeyFor(next.getFullYear(), next.getMonth(), next.getDate()).replace(/-/g,'');
+    lines.push('BEGIN:VEVENT');
+    lines.push('UID:'+b.id+'@chronitical');
+    lines.push('DTSTAMP:'+dateStr+'T000000Z');
+    lines.push('DTSTART;VALUE=DATE:'+dateStr);
+    lines.push('DTEND;VALUE=DATE:'+nextStr);
+    lines.push('RRULE:FREQ=YEARLY');
+    lines.push('SUMMARY:'+icsEscape(b.name+"'s birthday"));
+    lines.push('END:VEVENT');
+  });
+  lines.push('END:VCALENDAR');
+  const blob = new Blob([lines.join('\r\n')], {type:'text/calendar'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'chronitical-calendar.ics';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function searchEvents(){
+  const q = document.getElementById('eventSearchInput').value.trim().toLowerCase();
+  const el = document.getElementById('eventSearchResults');
+  if(!q){ el.innerHTML = ''; return; }
+  const matches = state.events
+    .filter(e=>e.title.toLowerCase().includes(q))
+    .sort((a,b)=> a.date.localeCompare(b.date));
+  el.innerHTML = matches.length ? matches.map(e=>{
+    const d = new Date(e.date+'T00:00:00');
+    const dateLabel = d.toLocaleDateString(undefined,{month:'short', day:'numeric', year:'numeric'});
+    const tm = fmtEventTime(e);
+    return `<div class="row">
+      <div class="badge" style="background:var(--c-events)">📅</div>
+      <div class="row-info"><b>${escapeHtml(e.title)}</b><span>${dateLabel}${tm ? ' · '+tm : ''}</span></div>
+    </div>`;
+  }).join('') : '<div class="empty">No matching events.</div>';
 }
 
 /* ---------- calories (with quantity, key-plate standards, and a history calendar) ---------- */
@@ -1268,7 +1525,10 @@ function addCalorie(){
   const kcal = parseInt(calEl.value);
   const qty = parseFloat(qtyEl.value) || null;
   const unit = unitEl.value;
-  if(!name || !kcal) return;
+  if(!name || isNaN(kcal)){
+    alert('Enter both a food name and a kcal value.');
+    return;
+  }
   if(!state.calories[TODAY]) state.calories[TODAY]=[];
   state.calories[TODAY].push({id:uid(), name, kcal, qty, unit});
   sset('cal:log', state.calories);
@@ -1301,17 +1561,53 @@ function fmtQty(e){
   if(!e.qty) return '';
   return e.unit==='unit' ? `${e.qty} unit${e.qty===1?'':'s'}` : `${e.qty} g`;
 }
+let editingCalId = null;
+function startEditCalorie(id){ editingCalId = id; renderCalories(); }
+function cancelEditCalorie(){ editingCalId = null; renderCalories(); }
+function saveEditCalorie(id){
+  const e = (state.calories[TODAY]||[]).find(e=>e.id===id);
+  if(e){
+    e.name = document.getElementById('editCalName-'+id).value.trim();
+    const kcalVal = parseInt(document.getElementById('editCalKcal-'+id).value);
+    if(!isNaN(kcalVal)) e.kcal = kcalVal;
+    const qtyVal = parseFloat(document.getElementById('editCalQty-'+id).value);
+    e.qty = isNaN(qtyVal) ? null : qtyVal;
+    e.unit = document.getElementById('editCalUnit-'+id).value;
+    sset('cal:log', state.calories);
+  }
+  editingCalId = null;
+  renderCalories();
+  renderCalHistory();
+}
 function renderCalories(){
   const list = state.calories[TODAY]||[];
   const total = list.reduce((s,e)=>s+e.kcal,0);
   const totalEl = document.getElementById('calTotal');
   if(totalEl) totalEl.textContent = total;
   const el = document.getElementById('calLog');
-  if(el) el.innerHTML = list.length ? list.map(e=>`
-    <div class="log-item">
+  if(el) el.innerHTML = list.length ? list.map(e=>{
+    if(editingCalId === e.id){
+      return `<div class="log-item" style="flex-direction:column; align-items:stretch; gap:8px;">
+        <input type="text" id="editCalName-${e.id}" value="${escapeHtml(e.name)}" placeholder="Name">
+        <div style="display:flex; gap:8px;">
+          <input type="number" id="editCalQty-${e.id}" value="${e.qty!=null?e.qty:''}" placeholder="Quantity" style="flex:1;">
+          <select id="editCalUnit-${e.id}" style="flex:1;">
+            <option value="g" ${e.unit==='g'?'selected':''}>grams</option>
+            <option value="unit" ${e.unit==='unit'?'selected':''}>units</option>
+          </select>
+        </div>
+        <input type="number" id="editCalKcal-${e.id}" value="${e.kcal}" placeholder="kcal">
+        <div style="display:flex; gap:8px;">
+          <button class="btn-ghost" onclick="saveEditCalorie('${e.id}')">Save</button>
+          <button class="btn-ghost" onclick="cancelEditCalorie()">Cancel</button>
+        </div>
+      </div>`;
+    }
+    return `<div class="log-item">
       <span>${escapeHtml(e.name)}${e.qty ? ` <span class="meta">· ${fmtQty(e)}</span>` : ''}</span>
-      <span><span class="amt">${e.kcal}</span> <button class="btn-ghost" onclick="deleteCalorie('${e.id}')">×</button></span>
-    </div>`).join('') : '<div class="empty">No entries yet today.</div>';
+      <span><span class="amt">${e.kcal}</span> <button class="btn-ghost" onclick="startEditCalorie('${e.id}')">Edit</button> <button class="btn-ghost" onclick="deleteCalorie('${e.id}')">×</button></span>
+    </div>`;
+  }).join('') : '<div class="empty">No entries yet today.</div>';
   const goalEl = document.getElementById('calGoal');
   if(goalEl) goalEl.value = state.calGoal;
 
@@ -1325,6 +1621,8 @@ function renderCalories(){
     const frac = Math.max(0, Math.min(total/goal, 1));
     ringEl.style.strokeDasharray = `${circumference}`;
     ringEl.style.strokeDashoffset = `${circumference*(1-frac)}`;
+    // a round linecap on a zero-length arc still renders as a dot — avoid that
+    ringEl.setAttribute('stroke-linecap', frac > 0 ? 'round' : 'butt');
   }
   if(ringTextEl) ringTextEl.textContent = total;
   if(ringGoalEl) ringGoalEl.textContent = goal;
@@ -1417,6 +1715,16 @@ function shiftHistoryMonth(delta){
 function dateKeyFor(y,m,d){
   return y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
 }
+function cycleActivity(key){
+  const a = state.activities[key] || {gym:false, run:false};
+  if(!a.gym && !a.run) a.gym = true;
+  else if(a.gym && !a.run){ a.gym=false; a.run=true; }
+  else if(!a.gym && a.run){ a.gym=true; a.run=true; }
+  else { a.gym=false; a.run=false; }
+  state.activities[key] = a;
+  sset('activities:log', state.activities);
+  renderCalHistory();
+}
 function renderCalHistory(){
   const el = document.getElementById('calHistoryGrid');
   const label = document.getElementById('calHistoryLabel');
@@ -1432,16 +1740,19 @@ function renderCalHistory(){
     const entries = state.calories[key]||[];
     const total = entries.reduce((s,e)=>s+e.kcal,0);
     const isToday = key===TODAY;
-    cells += `<div class="hist-cell ${isToday?'hist-today':''} ${total?'hist-has':''}">
+    const act = state.activities[key];
+    const actIcons = act ? `${act.gym?'💪':''}${act.run?'🏃':''}` : '';
+    cells += `<div class="hist-cell ${isToday?'hist-today':''} ${total?'hist-has':''}" onclick="cycleActivity('${key}')" title="Tap to log gym/run for this day">
       <div class="hist-day">${d}</div>
       ${total ? `<div class="hist-kcal">${total}</div>` : ''}
+      ${actIcons ? `<div class="hist-activity">${actIcons}</div>` : ''}
     </div>`;
   }
   el.innerHTML = cells;
 }
 
 /* ---------- culture (movies / series / books in one section) ---------- */
-const CULTURE_TYPE_LABELS = {movie:'Movie', series:'Series', book:'Book', music:'Music'};
+const CULTURE_TYPE_LABELS = {movie:'Movie', series:'Series', book:'Book', music:'Music', app:'App', website:'Website'};
 const MUSIC_KIND_LABELS = {artist:'Artist', album:'Album', song:'Song'};
 function toggleCultureMusicKind(){
   const type = document.getElementById('cultureType').value;
@@ -1933,28 +2244,17 @@ function renderUpcomingHome(){
     const md = d.toLocaleDateString(undefined,{month:'short', day:'numeric'});
     const label = item.date===TODAY ? 'Today' : md;
     if(item.type==='birthday'){
-      return `<div class="row hb-row" onclick="toggleRowExpand(this)">
+      return `<div class="row">
         <div class="badge" style="background:var(--c-dates)">🎂</div>
-        <div class="row-info"><b>${escapeHtml(item.title)}</b><span class="hb-detail">${label} · Birthday</span></div>
+        <div class="row-info"><b>${escapeHtml(item.title)}</b><span>${label} · Birthday</span></div>
       </div>`;
     }
     const tm = fmtEventTime(item);
-    return `<div class="row hb-row" onclick="toggleRowExpand(this)">
+    return `<div class="row">
       <div class="badge" style="background:var(--c-events)">📅</div>
-      <div class="row-info"><b>${escapeHtml(item.title)}</b><span class="hb-detail">${label}${tm ? ' · '+tm : ''}</span></div>
+      <div class="row-info"><b>${escapeHtml(item.title)}</b><span>${label}${tm ? ' · '+tm : ''}</span></div>
     </div>`;
   }).join('');
-}
-
-/* ---------- voice (Web Speech API) ---------- */
-function getRecognition(){
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if(!SR) return null;
-  const r = new SR();
-  r.lang = 'en-US';
-  r.interimResults = false;
-  r.maxAlternatives = 1;
-  return r;
 }
 
 /* ---------- init ---------- */
@@ -2024,6 +2324,8 @@ async function loadAll(){
   const storedTabOrder = await sget('tabs:order', null);
   if(storedTabOrder){ tabOrder = storedTabOrder; buildTabstrip(); }
 
+  state.chatHistory = await sget('chat:history', []);
+  state.activities = await sget('activities:log', {});
   renderAll();
 }
 function renderAll(){
@@ -2041,6 +2343,7 @@ function renderAll(){
   renderIdeas();
   renderEvents();
   renderBdays();
+  renderChat();
 }
 
 buildTabstrip();
