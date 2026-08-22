@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ledger-cache-v7';
+const CACHE_NAME = 'ledger-cache-v10';
 const APP_SHELL = [
   './',
   './index.html',
