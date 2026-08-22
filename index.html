@@ -151,15 +151,16 @@
 
   .cal-history-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:5px;}
   .hist-cell{aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding-top:7px; border-radius:9px; background:var(--cream); font-size:11px; cursor:pointer;}
-  .hist-activity{font-size:10px; line-height:11px; height:11px;}
+  .hist-top-row{display:grid; grid-template-columns:13px 1fr 13px; align-items:center; width:100%; height:14px;}
+  .hist-icon-left{font-size:9px; text-align:left; line-height:14px;}
+  .hist-icon-right{font-size:9px; text-align:right; line-height:14px;}
+  .hist-day{font-weight:600; color:var(--ink); text-align:center; line-height:14px;}
+  .hist-kcal{font-family:'JetBrains Mono',monospace; font-size:9.5px; color:var(--c-cal); height:12px; line-height:12px;}
   .hist-weight{font-size:8.5px; color:var(--ink-soft); line-height:11px; height:11px;}
-  .hist-meta{display:flex; align-items:center; gap:3px; height:11px;}
   .hist-cell.empty-cell{background:transparent;}
   .hist-cell.hist-has{background:rgba(180,80,106,0.12);}
   .hist-cell.hist-today{border:1.5px solid var(--c-cal);}
   .hist-cell.hist-selected{outline:2px solid var(--c-events); outline-offset:-2px;}
-  .hist-day{font-weight:600; color:var(--ink); height:14px; line-height:14px;}
-  .hist-kcal{font-family:'JetBrains Mono',monospace; font-size:9.5px; color:var(--c-cal); height:12px; line-height:12px;}
 
   .plate-row{display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid var(--line); color:var(--ink-soft);}
   .plate-row:last-child{border-bottom:none;}
@@ -606,6 +607,16 @@ function buildSectionShells(){
       </div>
       <div class="cal-history-grid" id="calHistoryGrid"></div>
       <div style="font-size:11px; color:var(--ink-soft); margin-top:8px;">Tap a day to see what you ate, your weight, and log gym/run</div>
+    </div>
+
+    <div class="card" style="--spine:var(--c-cal)">
+      <h2>Trends — last 30 days</h2>
+      <div style="display:flex; gap:14px; font-size:11px; color:var(--ink-soft); margin-bottom:8px;">
+        <span><span style="display:inline-block; width:9px; height:9px; background:var(--c-cal); opacity:.35; border-radius:2px; margin-right:4px;"></span>Calories</span>
+        <span><span style="display:inline-block; width:9px; height:2px; background:var(--ink); margin-right:4px; vertical-align:middle;"></span>Weight</span>
+        <span>💪🏃 activity</span>
+      </div>
+      <div id="healthTrendsChart"></div>
     </div>
   </section>
 
@@ -1433,7 +1444,11 @@ function renderEventsCal(){
     const isToday = key===TODAY;
     const isSelected = key===selectedCalDay;
     cells += `<div class="hist-cell ${isToday?'hist-today':''} ${items.length?'hist-has':''} ${isSelected?'hist-selected':''}" onclick="showEventsForDay('${key}')">
-      <div class="hist-day">${d}</div>
+      <div class="hist-top-row">
+        <span class="hist-icon-left"></span>
+        <span class="hist-day">${d}</span>
+        <span class="hist-icon-right"></span>
+      </div>
       <div class="hist-kcal">${items.length ? (items.length===1?'•':items.length) : ''}</div>
     </div>`;
   }
@@ -1963,18 +1978,110 @@ function renderCalHistory(){
     const total = entries.reduce((s,e)=>s+e.kcal,0);
     const isToday = key===TODAY;
     const act = state.activities[key];
-    const actIcons = act ? `${act.gym?'💪':''}${act.run?'🏃':''}` : '';
     const w = state.weights[key];
     cells += `<div class="hist-cell ${isToday?'hist-today':''} ${total?'hist-has':''}" onclick="openDayDetail('${key}')" title="Tap to see details">
-      <div class="hist-day">${d}</div>
-      <div class="hist-kcal">${total ? total : ''}</div>
-      <div class="hist-meta">
-        ${actIcons ? `<span class="hist-activity">${actIcons}</span>` : ''}
-        ${w ? `<span class="hist-weight">${w.value}${w.unit}</span>` : ''}
+      <div class="hist-top-row">
+        <span class="hist-icon-left">${act?.gym ? '💪' : ''}</span>
+        <span class="hist-day">${d}</span>
+        <span class="hist-icon-right">${act?.run ? '🏃' : ''}</span>
       </div>
+      <div class="hist-kcal">${total ? total : ''}</div>
+      <div class="hist-weight">${w ? w.value+w.unit : ''}</div>
     </div>`;
   }
   el.innerHTML = cells;
+  renderHealthTrends();
+}
+
+function renderHealthTrends(){
+  const el = document.getElementById('healthTrendsChart');
+  if(!el) return;
+
+  const N = 30;
+  const today0 = new Date(); today0.setHours(0,0,0,0);
+  const days = [];
+  for(let i=N-1; i>=0; i--){
+    const d = new Date(today0); d.setDate(d.getDate()-i);
+    const key = dateKeyFor(d.getFullYear(), d.getMonth(), d.getDate());
+    const kcal = (state.calories[key]||[]).reduce((s,e)=>s+e.kcal,0);
+    const w = state.weights[key];
+    const act = state.activities[key];
+    days.push({ key, date:d, kcal, weight: w ? w.value : null, gym: !!(act&&act.gym), run: !!(act&&act.run) });
+  }
+
+  const W = 320, H = 150;
+  const padL = 8, padR = 8, padT = 8;
+  const plotW = W - padL - padR;
+  const barAreaTop = padT, barAreaBottom = 96;
+  const markerY = 112;
+  const labelY = 140;
+  const colW = plotW / N;
+  const barW = Math.max(2, colW*0.6);
+
+  const maxKcal = Math.max(...days.map(d=>d.kcal), 1);
+  const kcalScale = v => barAreaBottom - (v/maxKcal) * (barAreaBottom-barAreaTop);
+
+  const weighted = days.filter(d=>d.weight!=null);
+  let minW = 0, maxW = 1;
+  if(weighted.length){
+    minW = Math.min(...weighted.map(d=>d.weight));
+    maxW = Math.max(...weighted.map(d=>d.weight));
+    if(minW===maxW){ minW -= 1; maxW += 1; }
+    else { const pad=(maxW-minW)*0.15; minW-=pad; maxW+=pad; }
+  }
+  const weightScale = v => barAreaBottom - ((v-minW)/(maxW-minW)) * (barAreaBottom-barAreaTop);
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%; height:auto; display:block;">`;
+  // baseline
+  svg += `<line x1="${padL}" y1="${barAreaBottom}" x2="${W-padR}" y2="${barAreaBottom}" stroke="var(--line)" stroke-width="1"/>`;
+
+  // calorie bars
+  days.forEach((d,i)=>{
+    if(!d.kcal) return;
+    const x = padL + i*colW + (colW-barW)/2;
+    const y = kcalScale(d.kcal);
+    svg += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${(barAreaBottom-y).toFixed(1)}" fill="var(--c-cal)" opacity="0.35" rx="1.5"/>`;
+  });
+
+  // weight line + points
+  if(weighted.length){
+    const pts = weighted.map(d=>{
+      const i = days.indexOf(d);
+      const x = padL + i*colW + colW/2;
+      const y = weightScale(d.weight);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    if(pts.length>1){
+      svg += `<polyline points="${pts.join(' ')}" fill="none" stroke="var(--ink)" stroke-width="1.75" stroke-linejoin="round" stroke-linecap="round"/>`;
+    }
+    weighted.forEach(d=>{
+      const i = days.indexOf(d);
+      const x = padL + i*colW + colW/2;
+      const y = weightScale(d.weight);
+      svg += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2" fill="var(--ink)"/>`;
+    });
+  }
+
+  // gym/run markers below the baseline
+  days.forEach((d,i)=>{
+    if(!d.gym && !d.run) return;
+    const x = padL + i*colW + colW/2;
+    const icon = d.gym && d.run ? '💪🏃' : (d.gym ? '💪' : '🏃');
+    svg += `<text x="${x.toFixed(1)}" y="${markerY}" font-size="7" text-anchor="middle">${icon}</text>`;
+  });
+
+  // sparse date labels, roughly every 5 days
+  days.forEach((d,i)=>{
+    if(i % 5 !== 0 && i !== N-1) return;
+    const x = padL + i*colW + colW/2;
+    const label = d.date.toLocaleDateString(undefined,{month:'numeric', day:'numeric'});
+    svg += `<text x="${x.toFixed(1)}" y="${labelY}" font-size="7" fill="var(--ink-soft)" text-anchor="middle">${label}</text>`;
+  });
+
+  svg += `</svg>`;
+
+  const hasAnyData = days.some(d=>d.kcal || d.weight!=null);
+  el.innerHTML = hasAnyData ? svg : '<div class="empty">Not enough logged yet to show a trend.</div>';
 }
 
 /* ---------- culture (movies / series / books in one section) ---------- */
