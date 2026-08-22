@@ -767,8 +767,8 @@ function getRecognition(interim){
 
 /* ---------- Assistant chat — talks to a free Cloudflare Worker, not Claude directly ----------
    Fill these in once you've deployed the Worker (see the setup notes it came with). */
-const WORKER_URL = '';       // e.g. 'https://chronitical-ai.yourname.workers.dev'
-const CHRONITICAL_APP_TOKEN = ''; // must match APP_TOKEN set in the Worker
+const WORKER_URL = 'https://chronitical-ai.michenet-kevin.workers.dev';
+const CHRONITICAL_APP_TOKEN = 'x7Kp2mQ9vLwZ4rT8';
 
 async function callAssistant(messages){
   if(!WORKER_URL || !CHRONITICAL_APP_TOKEN){
