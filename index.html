@@ -577,12 +577,6 @@ function buildSectionShells(){
     </div>
 
     <div class="card" style="--spine:var(--c-cal)">
-      <h2>Key plates</h2>
-      <div style="font-size:11px; color:var(--ink-soft); margin:-4px 0 8px;">Tick "Save as key plate" when logging food to add one here.</div>
-      <div id="foodStandardsList"></div>
-    </div>
-
-    <div class="card" style="--spine:var(--c-cal)">
       <h2>Weight</h2>
       <div class="add-row" style="align-items:center;">
         <input type="number" id="weightInput" placeholder="e.g. 72.5" style="flex:1;">
@@ -613,6 +607,8 @@ function buildSectionShells(){
         <option value="60">Last 60 days</option>
         <option value="90">Last 90 days</option>
         <option value="180">Last 6 months</option>
+        <option value="365">Last year</option>
+        <option value="ytd">Year to date</option>
       </select>
       <div style="display:flex; gap:14px; font-size:11px; color:var(--ink-soft); margin-bottom:8px;">
         <span><span style="display:inline-block; width:9px; height:9px; background:var(--c-cal); opacity:.35; border-radius:2px; margin-right:4px;"></span>Calories</span>
@@ -1628,70 +1624,14 @@ function renderCalories(){
   if(ringGoalEl) ringGoalEl.textContent = goal;
 }
 
-/* ---------- key plates (reusable standard foods) ---------- */
-function deleteFoodStandard(id){
-  state.foodStandards = state.foodStandards.filter(s=>s.id!==id);
-  sset('food:standards', state.foodStandards);
-  renderFoodStandards();
-}
-function quickAddStandard(id){
-  const s = state.foodStandards.find(s=>s.id===id);
-  if(!s) return;
-  if(!state.calories[TODAY]) state.calories[TODAY]=[];
-  state.calories[TODAY].push({id:uid(), name:s.name, kcal:s.kcal, qty:s.qty, unit:s.unit});
-  sset('cal:log', state.calories);
-  renderCalories();
-  renderCalHistory();
-}
-let editingStdId = null;
-function startEditFoodStandard(id){ editingStdId = id; renderFoodStandards(); }
-function cancelEditFoodStandard(){ editingStdId = null; renderFoodStandards(); }
-function saveEditFoodStandard(id){
-  const s = state.foodStandards.find(s=>s.id===id);
-  if(s){
-    s.name = document.getElementById('editStdName-'+id).value.trim();
-    const qtyVal = parseFloat(document.getElementById('editStdQty-'+id).value);
-    s.qty = isNaN(qtyVal) ? s.qty : qtyVal;
-    s.unit = document.getElementById('editStdUnit-'+id).value;
-    const kcalVal = parseInt(document.getElementById('editStdKcal-'+id).value);
-    s.kcal = isNaN(kcalVal) ? s.kcal : kcalVal;
-    sset('food:standards', state.foodStandards);
-  }
-  editingStdId = null;
-  renderFoodStandards();
-}
+/* ---------- key plates (reusable standard foods, selected via the Add food dropdown) ---------- */
 function renderFoodStandards(){
   const select = document.getElementById('foodStandardSelect');
-  if(select){
-    const current = select.value;
-    select.innerHTML = '<option value="">— custom / one-off —</option>' + state.foodStandards.map(s=>
-      `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
-    select.value = current;
-  }
-  const el = document.getElementById('foodStandardsList');
-  if(!el) return;
-  if(!state.foodStandards.length){ el.innerHTML = '<div class="empty">No key plates saved yet.</div>'; return; }
-  el.innerHTML = state.foodStandards.map(s=>{
-    if(editingStdId === s.id){
-      return `<div class="plate-row plate-row-edit">
-        <input type="text" id="editStdName-${s.id}" value="${escapeHtml(s.name)}" placeholder="Name">
-        <input type="number" id="editStdQty-${s.id}" value="${s.qty}" placeholder="Quantity">
-        <select id="editStdUnit-${s.id}">
-          <option value="g" ${s.unit==='g'?'selected':''}>grams</option>
-          <option value="unit" ${s.unit==='unit'?'selected':''}>units</option>
-        </select>
-        <input type="number" id="editStdKcal-${s.id}" value="${s.kcal}" placeholder="kcal">
-        <button class="btn-ghost" onclick="saveEditFoodStandard('${s.id}')">Save</button>
-        <button class="btn-ghost" onclick="cancelEditFoodStandard()">Cancel</button>
-      </div>`;
-    }
-    return `<div class="plate-row">
-      <div class="text">${escapeHtml(s.name)}<span class="meta">${s.qty}${s.unit==='unit'?' unit'+(s.qty===1?'':'s'):'g'} · ${s.kcal} kcal</span></div>
-      <button class="plate-add" onclick="quickAddStandard('${s.id}')">+</button>
-      <button class="btn-ghost" onclick="startEditFoodStandard('${s.id}')">Edit</button>
-      <button class="btn-ghost" onclick="deleteFoodStandard('${s.id}')">×</button>
-    </div>`;
-  }).join('');
+  if(!select) return;
+  const current = select.value;
+  select.innerHTML = '<option value="">— custom / one-off —</option>' + state.foodStandards.map(s=>
+    `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+  select.value = current;
 }
 
 /* ---------- calorie history calendar ---------- */
@@ -1874,30 +1814,47 @@ function renderCalHistory(){
 }
 
 let healthTrendsRangeDays = 30;
-function setHealthTrendsRange(days){
-  healthTrendsRangeDays = parseInt(days);
+function setHealthTrendsRange(val){
+  healthTrendsRangeDays = val; // either a number of days, or the string 'ytd'
   renderHealthTrends();
 }
 function renderHealthTrends(){
   const el = document.getElementById('healthTrendsChart');
   if(!el) return;
 
-  const N = healthTrendsRangeDays;
   const today0 = new Date(); today0.setHours(0,0,0,0);
-  const days = [];
-  for(let i=N-1; i>=0; i--){
-    const d = new Date(today0); d.setDate(d.getDate()-i);
+  let rangeStart;
+  if(healthTrendsRangeDays === 'ytd'){
+    rangeStart = new Date(today0.getFullYear(), 0, 1);
+  } else {
+    const N = parseInt(healthTrendsRangeDays);
+    rangeStart = new Date(today0); rangeStart.setDate(rangeStart.getDate()-(N-1));
+  }
+  const rangeSpanDays = Math.round((today0-rangeStart)/(1000*60*60*24)) + 1;
+
+  // build the full range first, so we can find where actual data begins within it
+  const fullRange = [];
+  for(let i=0; i<rangeSpanDays; i++){
+    const d = new Date(rangeStart); d.setDate(d.getDate()+i);
     const key = dateKeyFor(d.getFullYear(), d.getMonth(), d.getDate());
     const kcal = (state.calories[key]||[]).reduce((s,e)=>s+e.kcal,0);
     const w = state.weights[key];
     const act = state.activities[key];
-    days.push({ key, date:d, kcal, weight: w ? w.value : null, gym: !!(act&&act.gym), run: !!(act&&act.run) });
+    fullRange.push({ key, date:d, kcal, weight: w ? w.value : null, gym: !!(act&&act.gym), run: !!(act&&act.run) });
   }
-  // days[0] is the oldest day in range, days[days.length-1] is today — chart reads left (oldest) to right (today)
+  const firstDataIdx = fullRange.findIndex(d=> d.kcal || d.weight!=null || d.gym || d.run);
+  // trim any leading days with nothing logged, so the chart fills from the left instead of starting blank
+  const days = firstDataIdx === -1 ? [] : fullRange.slice(firstDataIdx);
+  const N = days.length;
+  // days[0] is the first day with data, days[days.length-1] is today — chart reads left (earliest) to right (today)
 
   const W = 320, H = 168;
   const padL = 8, padR = 8, padT = 8;
   const plotW = W - padL - padR;
+  if(N === 0){
+    el.innerHTML = '<div class="empty">Not enough logged yet to show a trend.</div>';
+    return;
+  }
   const barAreaTop = padT, barAreaBottom = 96;
   const gymY = 110, runY = 122;
   const labelY = 138;
@@ -1965,13 +1922,13 @@ function renderHealthTrends(){
   });
 
   // explicit reading-direction labels, so it's unambiguous which end is which
-  svg += `<text x="${padL}" y="${rangeLabelY}" font-size="7.5" fill="var(--ink-faint)" text-anchor="start">${N} days ago</text>`;
+  const firstLabel = days[0].date.toLocaleDateString(undefined,{month:'short', day:'numeric'});
+  svg += `<text x="${padL}" y="${rangeLabelY}" font-size="7.5" fill="var(--ink-faint)" text-anchor="start">${firstLabel}</text>`;
   svg += `<text x="${W-padR}" y="${rangeLabelY}" font-size="7.5" fill="var(--ink-faint)" text-anchor="end">Today →</text>`;
 
   svg += `</svg>`;
 
-  const hasAnyData = days.some(d=>d.kcal || d.weight!=null);
-  el.innerHTML = hasAnyData ? svg : '<div class="empty">Not enough logged yet to show a trend.</div>';
+  el.innerHTML = svg;
 }
 
 /* ---------- culture (movies / series / books in one section) ---------- */
