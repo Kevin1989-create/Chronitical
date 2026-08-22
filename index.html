@@ -150,15 +150,16 @@
   .log-item .meta{color:var(--ink-soft); font-size:12px;}
 
   .cal-history-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:5px;}
-  .hist-cell{aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:9px; background:var(--cream); font-size:11px; cursor:pointer;}
-  .hist-activity{font-size:10px; margin-top:1px; line-height:1;}
-  .hist-weight{font-size:8.5px; color:var(--ink-soft); margin-top:1px; line-height:1;}
+  .hist-cell{aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding-top:7px; border-radius:9px; background:var(--cream); font-size:11px; cursor:pointer;}
+  .hist-activity{font-size:10px; line-height:11px; height:11px;}
+  .hist-weight{font-size:8.5px; color:var(--ink-soft); line-height:11px; height:11px;}
+  .hist-meta{display:flex; align-items:center; gap:3px; height:11px;}
   .hist-cell.empty-cell{background:transparent;}
   .hist-cell.hist-has{background:rgba(180,80,106,0.12);}
   .hist-cell.hist-today{border:1.5px solid var(--c-cal);}
   .hist-cell.hist-selected{outline:2px solid var(--c-events); outline-offset:-2px;}
-  .hist-day{font-weight:600; color:var(--ink);}
-  .hist-kcal{font-family:'JetBrains Mono',monospace; font-size:9.5px; color:var(--c-cal); margin-top:2px;}
+  .hist-day{font-weight:600; color:var(--ink); height:14px; line-height:14px;}
+  .hist-kcal{font-family:'JetBrains Mono',monospace; font-size:9.5px; color:var(--c-cal); height:12px; line-height:12px;}
 
   .plate-row{display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid var(--line); color:var(--ink-soft);}
   .plate-row:last-child{border-bottom:none;}
@@ -1433,7 +1434,7 @@ function renderEventsCal(){
     const isSelected = key===selectedCalDay;
     cells += `<div class="hist-cell ${isToday?'hist-today':''} ${items.length?'hist-has':''} ${isSelected?'hist-selected':''}" onclick="showEventsForDay('${key}')">
       <div class="hist-day">${d}</div>
-      ${items.length ? `<div class="hist-kcal">${items.length===1?'•':items.length}</div>` : ''}
+      <div class="hist-kcal">${items.length ? (items.length===1?'•':items.length) : ''}</div>
     </div>`;
   }
   grid.innerHTML = cells;
@@ -1845,13 +1846,84 @@ function openDayDetail(key){
     </div>`).join('') : '<div class="empty">Nothing logged that day.</div>';
 
   renderDayDetailActivityButtons();
-
-  const w = state.weights[key];
-  document.getElementById('dayDetailWeight').innerHTML = w
-    ? `<div class="row"><div class="row-info"><b>${w.value} ${w.unit}</b><span>at ${w.time}</span></div></div>`
-    : '<div class="empty">No weight logged that day.</div>';
+  renderDayDetailWeight();
 
   modal.style.display = 'flex';
+}
+function renderDayDetailWeight(){
+  const key = dayDetailKey;
+  const w = state.weights[key];
+  const el = document.getElementById('dayDetailWeight');
+  if(!el) return;
+  if(w){
+    el.innerHTML = `<div class="row">
+      <div class="row-info"><b>${w.value} ${w.unit}</b><span>at ${w.time}</span></div>
+      <button class="btn-ghost" onclick="startEditDayWeight()">Edit</button>
+      <button class="btn-ghost" onclick="deleteDayWeight()">×</button>
+    </div>`;
+  } else {
+    el.innerHTML = `<div class="empty" style="margin-bottom:8px;">No weight logged that day.</div>
+      <div class="add-row" style="gap:8px;">
+        <input type="number" id="dayWeightValue" placeholder="Weight" style="flex:1;">
+        <select id="dayWeightUnit" style="flex:0 0 65px;">
+          <option value="kg">kg</option>
+          <option value="lb">lb</option>
+        </select>
+        <button class="btn-ghost" onclick="saveDayWeight()">Add</button>
+      </div>`;
+  }
+}
+function startEditDayWeight(){
+  const key = dayDetailKey;
+  const w = state.weights[key];
+  const el = document.getElementById('dayDetailWeight');
+  if(!w || !el) return;
+  el.innerHTML = `
+    <div class="add-row" style="flex-direction:column; gap:8px;">
+      <div style="display:flex; gap:8px;">
+        <input type="number" id="dayWeightValue" value="${w.value}" style="flex:1;">
+        <select id="dayWeightUnit" style="flex:0 0 65px;">
+          <option value="kg" ${w.unit==='kg'?'selected':''}>kg</option>
+          <option value="lb" ${w.unit==='lb'?'selected':''}>lb</option>
+        </select>
+      </div>
+      <label style="font-size:12px; color:var(--ink-soft);">Date logged</label>
+      <input type="date" id="dayWeightDate" value="${key}">
+      <div style="display:flex; gap:8px;">
+        <button class="btn-ghost" onclick="saveDayWeight()">Save</button>
+        <button class="btn-ghost" onclick="renderDayDetailWeight()">Cancel</button>
+      </div>
+    </div>`;
+}
+function saveDayWeight(){
+  const key = dayDetailKey;
+  const valEl = document.getElementById('dayWeightValue');
+  const unitEl = document.getElementById('dayWeightUnit');
+  const dateEl = document.getElementById('dayWeightDate'); // only present when editing an existing entry
+  const val = parseFloat(valEl.value);
+  if(isNaN(val)){ alert('Enter a weight value.'); return; }
+  const existing = state.weights[key];
+  const newDate = dateEl ? dateEl.value : key;
+  const time = existing ? existing.time : (key===TODAY ? (()=>{ const n=new Date(); return String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'); })() : '—');
+  if(dateEl && newDate !== key){
+    delete state.weights[key]; // moving to a different date
+  }
+  state.weights[newDate] = { value: val, unit: unitEl.value, time };
+  sset('weights:log', state.weights);
+  if(newDate !== key){
+    openDayDetail(newDate); // follow the entry to its new date
+  } else {
+    renderDayDetailWeight();
+  }
+  renderCalHistory();
+  renderWeightToday();
+}
+function deleteDayWeight(){
+  delete state.weights[dayDetailKey];
+  sset('weights:log', state.weights);
+  renderDayDetailWeight();
+  renderCalHistory();
+  renderWeightToday();
 }
 function closeDayDetail(){
   document.getElementById('dayDetailModal').style.display = 'none';
@@ -1895,9 +1967,11 @@ function renderCalHistory(){
     const w = state.weights[key];
     cells += `<div class="hist-cell ${isToday?'hist-today':''} ${total?'hist-has':''}" onclick="openDayDetail('${key}')" title="Tap to see details">
       <div class="hist-day">${d}</div>
-      ${total ? `<div class="hist-kcal">${total}</div>` : ''}
-      ${actIcons ? `<div class="hist-activity">${actIcons}</div>` : ''}
-      ${w ? `<div class="hist-weight">${w.value}${w.unit}</div>` : ''}
+      <div class="hist-kcal">${total ? total : ''}</div>
+      <div class="hist-meta">
+        ${actIcons ? `<span class="hist-activity">${actIcons}</span>` : ''}
+        ${w ? `<span class="hist-weight">${w.value}${w.unit}</span>` : ''}
+      </div>
     </div>`;
   }
   el.innerHTML = cells;
