@@ -217,41 +217,26 @@
   }
   .modal-header{display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;}
   .modal-close{background:none; border:none; font-size:24px; line-height:1; color:var(--ink-soft); padding:4px 8px;}
-  #asstFields{display:flex; flex-direction:column; gap:10px; margin:2px 0;}
 </style>
 </head>
 <body>
 
-<button class="assistant-fab" id="assistantFab" onclick="openAssistantModal()" aria-label="Quick log">＋</button>
+<button class="assistant-fab" id="assistantFab" onclick="openAssistantModal()" aria-label="Assistant">＋</button>
 
 <div class="modal-overlay" id="assistantModal" style="display:none;" onclick="if(event.target===this) closeAssistantModal()">
   <div class="modal-card">
     <div class="modal-header">
-      <h2 style="margin:0;">Log anything</h2>
+      <h2 style="margin:0;">Assistant</h2>
       <button class="modal-close" onclick="closeAssistantModal()">×</button>
     </div>
-    <div style="font-size:12px; color:var(--ink-soft); margin-bottom:10px;">Runs fully offline — no Claude involved.</div>
-    <div class="add-row" style="flex-direction:column; gap:8px;">
-      <div style="display:flex; gap:8px;">
-        <input type="text" id="asstQuickText" placeholder="e.g. 'buy milk', 'dentist tomorrow 3pm', 'chicken salad 450kcal'…" style="flex:1;" onchange="guessAssistantType()">
-        <button class="mic-btn" id="micAsst" style="--mic-color:var(--c-assistant)" onclick="voiceAssistant()">🎙️</button>
-      </div>
-      <div style="font-size:11px; color:var(--ink-soft); margin-top:-4px;">Mic blocked? Tap the text field and use your keyboard's own dictation button instead — it works even when this one can't.</div>
-      <select id="asstType" onchange="renderAssistantFields()">
-        <option value="todo">To-do</option>
-        <option value="event">Calendar</option>
-        <option value="birthday">Birthdays</option>
-        <option value="cal">Health</option>
-        <option value="culture">Culture/Media</option>
-        <option value="grocery">Shopping</option>
-        <option value="place">Location</option>
-        <option value="idea">Ideas</option>
-        <option value="note">Other</option>
-      </select>
-      <div id="asstFields"></div>
-      <button class="btn btn-full" style="--btn-color:var(--c-assistant)" onclick="assistantAdd()">Log it</button>
+    <div class="chat-note">A general chat assistant. It can't see or edit your Chronitical data. Fresh conversation each time you reload.</div>
+    <div class="chat-log" id="chatLog"></div>
+    <div class="chat-input-row">
+      <input type="text" id="chatInput" placeholder="Type or use the mic…" onkeydown="if(event.key==='Enter') sendChat()">
+      <button class="mic-btn" id="micChat" style="--mic-color:var(--c-chat)" onclick="voiceChat()">🎙️</button>
+      <button class="btn" style="--btn-color:var(--c-chat)" onclick="sendChat()">Send</button>
     </div>
-    <div id="asstStatus" style="font-size:13px; color:var(--ink-soft); margin-top:8px;"></div>
+    <div class="voice-status" id="voiceStatusChat"></div>
   </div>
 </div>
 
@@ -297,7 +282,6 @@ const SECTIONS = [
   {id:'groceries',label:'Shopping',color:'var(--c-groceries)'},
   {id:'notes',  label:'Other',     color:'var(--c-notes)'},
   {id:'ideas',  label:'Ideas',     color:'var(--c-ideas)'},
-  {id:'chat',   label:'Assistant', color:'var(--c-chat)'},
 ];
 
 function todayKey(){
@@ -759,29 +743,14 @@ function buildSectionShells(){
       <div id="ideasList"></div>
     </div>
   </section>
-
-  <section id="sec-chat">
-    <div class="card" style="--spine:var(--c-chat)">
-      <h2>Assistant</h2>
-      <div class="chat-note">A general chat assistant — runs on a free open-source AI model via a small Cloudflare Worker, not Claude itself. It can't see or edit your Chronitical data. Fresh conversation each time you reload.</div>
-      <div class="chat-log" id="chatLog"></div>
-      <div class="chat-input-row">
-        <input type="text" id="chatInput" placeholder="Type or use the mic…" onkeydown="if(event.key==='Enter') sendChat()">
-        <button class="mic-btn" id="micChat" style="--mic-color:var(--c-chat)" onclick="voiceChat()">🎙️</button>
-        <button class="btn" style="--btn-color:var(--c-chat)" onclick="sendChat()">Send</button>
-      </div>
-      <div class="voice-status" id="voiceStatusChat"></div>
-    </div>
-  </section>
   `;
 }
 
-/* ---------- assistant: local quick-log, no Claude involved ---------- */
+/* ---------- assistant: AI chat, opened via the + button ---------- */
 function openAssistantModal(){
   document.getElementById('assistantModal').style.display = 'flex';
-  document.getElementById('asstQuickText').value = '';
-  assistantStatus('');
-  renderAssistantFields();
+  const log = document.getElementById('chatLog');
+  if(log) log.scrollTop = log.scrollHeight;
 }
 function closeAssistantModal(){
   document.getElementById('assistantModal').style.display = 'none';
@@ -794,43 +763,6 @@ function getRecognition(interim){
   r.interimResults = !!interim;
   r.maxAlternatives = 1;
   return r;
-}
-function voiceAssistant(){
-  const btn = document.getElementById('micAsst');
-  const input = document.getElementById('asstQuickText');
-  const recognition = getRecognition(true);
-  if(!recognition){ assistantStatus('Voice input is not supported in this browser.'); return; }
-  let finalized = false;
-  btn.classList.add('listening');
-  assistantStatus('Listening…');
-  recognition.onresult = (e)=>{
-    let transcript = '';
-    for(let i=0; i<e.results.length; i++) transcript += e.results[i][0].transcript;
-    input.value = transcript; // live-updates as you speak, so you can see it being understood
-    if(e.results[e.results.length-1].isFinal && !finalized){
-      finalized = true;
-      btn.classList.remove('listening');
-      assistantStatus('');
-      guessAssistantType();
-    }
-  };
-  recognition.onerror = (e)=>{
-    btn.classList.remove('listening');
-    if(e && e.error === 'not-allowed'){ assistantStatus('Microphone access was blocked — allow it in your browser/site settings, then try again.'); }
-    else if(e && e.error === 'no-speech'){ assistantStatus("Didn't hear anything — try again a bit closer to the mic."); }
-    else if(e && e.error === 'network'){ assistantStatus('Voice recognition needs an internet connection.'); }
-    else { assistantStatus("Didn't catch that — try again."); }
-  };
-  recognition.onend = ()=>{
-    btn.classList.remove('listening');
-    if(!finalized && input.value.trim()){ finalized = true; assistantStatus(''); guessAssistantType(); }
-  };
-  try{
-    recognition.start();
-  }catch(err){
-    btn.classList.remove('listening');
-    assistantStatus('Could not start voice input — try again.');
-  }
 }
 
 /* ---------- Assistant chat — talks to a free Cloudflare Worker, not Claude directly ----------
@@ -903,271 +835,6 @@ function voiceChat(){
   recognition.onerror = ()=>{ status.textContent = "Didn't catch that — try again."; btn.classList.remove('listening'); };
   recognition.onend = ()=>{ btn.classList.remove('listening'); };
   recognition.start();
-}
-
-function parseRelativeDate(text){
-  const t = text.toLowerCase();
-  const now = new Date();
-  if(/day after tomorrow/.test(t)){ const d=new Date(now); d.setDate(d.getDate()+2); return dateToKey(d); }
-  if(/\btoday\b/.test(t)) return dateToKey(now);
-  if(/\btomorrow\b/.test(t)){ const d=new Date(now); d.setDate(d.getDate()+1); return dateToKey(d); }
-  const inDays = t.match(/in (\d+) days?/);
-  if(inDays){ const d=new Date(now); d.setDate(d.getDate()+parseInt(inDays[1])); return dateToKey(d); }
-  const days = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
-  for(let i=0;i<days.length;i++){
-    if(t.includes(days[i])){
-      const d = new Date(now);
-      let diff = (i - d.getDay() + 7) % 7;
-      if(diff===0 || /\bnext\b/.test(t)) diff += diff===0 ? 7 : 0; // "next <day>" or same-day-name always means the upcoming one, not today
-      d.setDate(d.getDate() + diff);
-      return dateToKey(d);
-    }
-  }
-  return null;
-}
-function parseTimeFromText(text){
-  const t = text.toLowerCase();
-  if(/\bnoon\b/.test(t)) return '12:00';
-  if(/\bmidnight\b/.test(t)) return '00:00';
-  const ampm = text.match(/(\d{1,2})(?::(\d{2}))?\s?(am|pm)/i);
-  if(ampm){
-    let h = parseInt(ampm[1]);
-    const min = ampm[2] || '00';
-    const ap = ampm[3].toLowerCase();
-    if(ap==='pm' && h<12) h+=12;
-    if(ap==='am' && h===12) h=0;
-    return String(h).padStart(2,'0')+':'+min;
-  }
-  const h24 = text.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
-  if(h24) return String(parseInt(h24[1])).padStart(2,'0')+':'+h24[2];
-  return null;
-}
-function parseKcalFromText(text){
-  const m = text.match(/(\d{2,4})\s?(kcal|calories?)/i);
-  return m ? parseInt(m[1]) : null;
-}
-function parseQtyUnitFromText(text){
-  const m = text.match(/(\d+(?:\.\d+)?)\s?(g|grams?|units?|pieces?|slices?)\b/i);
-  if(!m) return null;
-  const qty = parseFloat(m[1]);
-  const raw = m[2].toLowerCase();
-  const unit = raw.startsWith('g') ? 'g' : 'unit';
-  return {qty, unit, match:m[0]};
-}
-function guessAssistantType(){
-  const text = document.getElementById('asstQuickText').value.trim();
-  if(!text) return;
-  const t = text.toLowerCase();
-
-  // Order matters: more specific/narrow signals are checked first so they
-  // aren't shadowed by broader ones (e.g. a reminder that happens to
-  // mention a weekday should stay a to-do, not become a calendar event).
-  let type = 'note';
-  if(/birthday/.test(t)) type='birthday';
-  else if(/kcal|calories?|\bate\b|breakfast|lunch|dinner|\bsnack\b/.test(t)) type='cal';
-  else if(/\bbuy\b|grocery|groceries|shopping list/.test(t)) type='grocery';
-  else if(/\b(movie|film|series|tv show|book|novel|album|song|track|artist)\b/.test(t) || /\b(watch|read|listen to)\b/.test(t)) type='culture';
-  else if(/todo|task|remind|need to|have to|don't forget/.test(t)) type='todo';
-  else if(/\bvisit\b|\bgo to\b|want to go|travel to/.test(t)) type='place';
-  else if(/appointment|meeting|\bevent\b|tomorrow|today|next week|\bmonday\b|\btuesday\b|\bwednesday\b|\bthursday\b|\bfriday\b|\bsaturday\b|\bsunday\b/.test(t)) type='event';
-
-  document.getElementById('asstType').value = type;
-  renderAssistantFields();
-
-  if(type==='todo'){
-    document.getElementById('asstTodoText').value = text;
-    const d = parseRelativeDate(text);
-    if(d) document.getElementById('asstTodoDate').value = d;
-    if(/\basap\b|urgent|right away/.test(t)) document.getElementById('asstTodoAsap').checked = true;
-  } else if(type==='event'){
-    document.getElementById('asstEventTitle').value = text;
-    const d = parseRelativeDate(text);
-    if(d) document.getElementById('asstEventDate').value = d;
-    const tm = parseTimeFromText(text);
-    if(tm) document.getElementById('asstEventTime').value = tm;
-  } else if(type==='birthday'){
-    document.getElementById('asstBdayName').value = text.replace(/birthday/i,'').replace(/\bis\b|\bon\b/gi,'').trim();
-    const d = parseRelativeDate(text);
-    if(d) document.getElementById('asstBdayDate').value = d;
-  } else if(type==='cal'){
-    const kcal = parseKcalFromText(text);
-    const qu = parseQtyUnitFromText(text);
-    let name = text;
-    if(kcal) name = name.replace(new RegExp(kcal+'\\s?(kcal|calories?)','i'), '');
-    if(qu) name = name.replace(qu.match, '');
-    document.getElementById('asstFoodName').value = name.trim().replace(/^,|,$/g,'').trim();
-    if(kcal) document.getElementById('asstFoodKcal').value = kcal;
-    if(qu){ document.getElementById('asstFoodQty').value = qu.qty; document.getElementById('asstFoodUnit').value = qu.unit; }
-  } else if(type==='culture'){
-    const kindMap = {artist:'artist', album:'album', song:'song', track:'song'};
-    const typeMap = {movie:'movie', film:'movie', series:'series', 'tv show':'series', book:'book', novel:'book', album:'music', song:'music', track:'music', artist:'music'};
-    let matchedType = 'movie', matchedKind = null;
-    for(const key in typeMap){ if(t.includes(key)){ matchedType = typeMap[key]; break; } }
-    for(const key in kindMap){ if(t.includes(key)){ matchedKind = kindMap[key]; break; } }
-    let title = text.replace(/\b(watch|read|listen to)\b/gi,'').replace(/\b(movie|film|series|tv show|book|novel|album|song|track|artist)\b/gi,'').trim();
-    document.getElementById('asstCultureTitle').value = title;
-    document.getElementById('asstCultureType').value = matchedType;
-    if(matchedType==='music'){
-      document.getElementById('asstCultureKindRow').style.display = 'block';
-      if(matchedKind) document.getElementById('asstCultureKindRow').value = matchedKind;
-    }
-  } else if(type==='grocery'){
-    document.getElementById('asstGroceryName').value = text.replace(/^buy\s+/i,'').replace(/^add\s+/i,'');
-  } else if(type==='place'){
-    document.getElementById('asstPlaceName').value = text.replace(/\b(want to go|visit|go to|travel to)\b/gi,'').trim();
-  } else if(type==='idea'){
-    document.getElementById('asstIdeaBody').value = text;
-  } else if(type==='note'){
-    document.getElementById('asstNoteBody').value = text;
-  }
-}
-function renderAssistantFields(){
-  const type = document.getElementById('asstType').value;
-  const el = document.getElementById('asstFields');
-  if(type==='todo'){
-    el.innerHTML = `
-      <input type="text" id="asstTodoText" placeholder="What do you need to do?">
-      <div style="display:flex; gap:8px; align-items:center;">
-        <input type="date" id="asstTodoDate" style="flex:1;">
-        <label style="display:flex; align-items:center; gap:6px; font-size:13px; color:var(--ink-soft); white-space:nowrap;">
-          <input type="checkbox" id="asstTodoAsap" style="width:auto;"> ASAP
-        </label>
-      </div>`;
-  } else if(type==='event'){
-    el.innerHTML = `
-      <input type="text" id="asstEventTitle" placeholder="Event title">
-      <input type="date" id="asstEventDate">
-      <div style="display:flex; gap:8px;">
-        <input type="time" id="asstEventTime" style="flex:1;">
-        <input type="time" id="asstEventEndTime" style="flex:1;">
-      </div>`;
-  } else if(type==='birthday'){
-    el.innerHTML = `
-      <input type="text" id="asstBdayName" placeholder="Name">
-      <input type="date" id="asstBdayDate">`;
-  } else if(type==='cal'){
-    el.innerHTML = `
-      <input type="text" id="asstFoodName" placeholder="Food name">
-      <div style="display:flex; gap:8px;">
-        <input type="number" id="asstFoodQty" placeholder="Quantity (optional)" style="flex:1;">
-        <select id="asstFoodUnit" style="flex:1;">
-          <option value="g">grams</option>
-          <option value="unit">units</option>
-        </select>
-      </div>
-      <input type="number" id="asstFoodKcal" placeholder="kcal">`;
-  } else if(type==='culture'){
-    const typeOptions = Object.entries(CULTURE_TYPE_LABELS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
-    const kindOptions = Object.entries(MUSIC_KIND_LABELS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
-    el.innerHTML = `
-      <input type="text" id="asstCultureTitle" placeholder="Title…">
-      <select id="asstCultureType" onchange="document.getElementById('asstCultureKindRow').style.display = this.value==='music' ? 'block' : 'none';">${typeOptions}</select>
-      <select id="asstCultureKindRow" style="display:none;">${kindOptions}</select>`;
-  } else if(type==='grocery'){
-    el.innerHTML = `<input type="text" id="asstGroceryName" placeholder="Item name">`;
-  } else if(type==='place'){
-    const catOptions = Object.entries(PLACE_LABELS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
-    el.innerHTML = `
-      <input type="text" id="asstPlaceName" placeholder="Name">
-      <select id="asstPlaceCategory">${catOptions}</select>`;
-  } else if(type==='idea'){
-    el.innerHTML = `
-      <input type="text" id="asstIdeaTitle" placeholder="Title (optional)">
-      <textarea id="asstIdeaBody" placeholder="Write your idea…"></textarea>`;
-  } else if(type==='note'){
-    el.innerHTML = `
-      <input type="text" id="asstNoteTitle" placeholder="Title (optional)">
-      <textarea id="asstNoteBody" placeholder="Write something…"></textarea>`;
-  }
-}
-function assistantStatus(msg){
-  const el = document.getElementById('asstStatus');
-  if(el) el.textContent = msg;
-}
-function assistantAdd(){
-  const type = document.getElementById('asstType').value;
-  if(type==='todo'){
-    const text = document.getElementById('asstTodoText').value.trim();
-    if(!text){ assistantStatus('Enter a task first.'); return; }
-    const dueDate = document.getElementById('asstTodoDate').value || null;
-    const asap = document.getElementById('asstTodoAsap').checked;
-    const maxOrder = state.todos.reduce((m,t)=>Math.max(m, t.order||0), -1);
-    state.todos.push({id:uid(), text, done:false, dueDate, asap, order:maxOrder+1});
-    sset('todos:all', state.todos);
-    renderTodoList(); renderTodayTodos();
-    assistantStatus(`Added "${text}" to your to-do list.`);
-  } else if(type==='event'){
-    const title = document.getElementById('asstEventTitle').value.trim();
-    const date = document.getElementById('asstEventDate').value;
-    if(!title || !date){ assistantStatus('An event needs a title and a date.'); return; }
-    const time = document.getElementById('asstEventTime').value;
-    const endTime = document.getElementById('asstEventEndTime').value;
-    state.events.push({id:uid(), title, date, time, endTime});
-    sset('events:list', state.events);
-    renderEvents();
-    assistantStatus(`Added "${title}" to your calendar.`);
-  } else if(type==='birthday'){
-    const name = document.getElementById('asstBdayName').value.trim();
-    const date = document.getElementById('asstBdayDate').value;
-    if(!name || !date){ assistantStatus('A birthday needs a name and a date.'); return; }
-    state.bdays.push({id:uid(), name, date});
-    sset('bdays:list', state.bdays);
-    renderBdays();
-    assistantStatus(`Added "${name}"'s birthday.`);
-  } else if(type==='cal'){
-    const name = document.getElementById('asstFoodName').value.trim();
-    const kcal = parseInt(document.getElementById('asstFoodKcal').value);
-    if(!name || !kcal){ assistantStatus('Enter a food name and kcal.'); return; }
-    const qty = parseFloat(document.getElementById('asstFoodQty').value) || null;
-    const unit = document.getElementById('asstFoodUnit').value;
-    if(!state.calories[TODAY]) state.calories[TODAY]=[];
-    state.calories[TODAY].push({id:uid(), name, kcal, qty, unit});
-    sset('cal:log', state.calories);
-    renderCalories(); renderCalHistory();
-    assistantStatus(`Logged "${name}" — ${kcal} kcal.`);
-  } else if(type==='culture'){
-    const title = document.getElementById('asstCultureTitle').value.trim();
-    if(!title){ assistantStatus('Enter a title.'); return; }
-    const cType = document.getElementById('asstCultureType').value;
-    const kind = cType==='music' ? document.getElementById('asstCultureKindRow').value : null;
-    state.culture.push({id:uid(), title, type:cType, kind, done:false});
-    sset('culture:list', state.culture);
-    renderCulture();
-    assistantStatus(`Added "${title}" to Culture.`);
-  } else if(type==='grocery'){
-    const name = document.getElementById('asstGroceryName').value.trim();
-    if(!name){ assistantStatus('Enter an item name.'); return; }
-    state.groceries.push({id:uid(), name, done:false});
-    sset('groceries:list', state.groceries);
-    renderGroceries();
-    assistantStatus(`Added "${name}" to groceries.`);
-  } else if(type==='place'){
-    const name = document.getElementById('asstPlaceName').value.trim();
-    if(!name){ assistantStatus('Enter a name.'); return; }
-    const category = document.getElementById('asstPlaceCategory').value;
-    state.places.push({id:uid(), name, category, done:false, rating:null});
-    sset('places:list', state.places);
-    renderPlaces();
-    assistantStatus(`Added "${name}" to Location.`);
-  } else if(type==='idea'){
-    const title = document.getElementById('asstIdeaTitle').value.trim();
-    const body = document.getElementById('asstIdeaBody').value.trim();
-    if(!title && !body){ assistantStatus('Write something first.'); return; }
-    state.ideas.unshift({id:uid(), title, body, ts:Date.now()});
-    sset('ideas:list', state.ideas);
-    renderIdeas();
-    assistantStatus('Idea saved.');
-  } else if(type==='note'){
-    const title = document.getElementById('asstNoteTitle').value.trim();
-    const body = document.getElementById('asstNoteBody').value.trim();
-    if(!title && !body){ assistantStatus('Write something first.'); return; }
-    state.notes.unshift({id:uid(), title, body, ts:Date.now()});
-    sset('notes:list', state.notes);
-    renderNotes();
-    assistantStatus('Saved.');
-  }
-  document.getElementById('asstQuickText').value = '';
-  renderAssistantFields();
 }
 
 /* ---------- todos (unified list: optional due date, ASAP flag, manual drag order) ---------- */
@@ -2530,7 +2197,6 @@ function renderAll(){
 
 buildTabstrip();
 buildSectionShells();
-renderAssistantFields();
 setupTodoDrag();
 setupPlacesDrag();
 setupTabDrag();
