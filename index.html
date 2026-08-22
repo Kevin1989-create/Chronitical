@@ -150,6 +150,8 @@
   .log-item .meta{color:var(--ink-soft); font-size:12px;}
 
   .cal-history-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:5px;}
+  .cal-weekday-row{display:grid; grid-template-columns:repeat(7,1fr); gap:5px; margin-bottom:5px;}
+  .cal-weekday-row span{text-align:center; font-size:10px; font-weight:600; color:var(--ink-soft); text-transform:uppercase;}
   .hist-cell{aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding-top:7px; border-radius:9px; background:var(--cream); font-size:11px; cursor:pointer;}
   .hist-top-row{display:grid; grid-template-columns:13px 1fr 13px; align-items:center; width:100%; height:14px;}
   .hist-icon-left{font-size:9px; text-align:left; line-height:14px;}
@@ -507,12 +509,6 @@ function buildSectionShells(){
       </div>
     </div>
     <div class="card" style="--spine:var(--c-events)">
-      <h2>Import from Google Calendar</h2>
-      <div style="font-size:12px; color:var(--ink-soft); margin-bottom:10px; line-height:1.5;">In Google Calendar: Settings → Import & export → Export, then upload the .ics file here.</div>
-      <input type="file" id="icsFileInput" accept=".ics" onchange="handleIcsFile(event)">
-      <div id="icsPreview"></div>
-    </div>
-    <div class="card" style="--spine:var(--c-events)">
       <h2>Upcoming</h2>
       <div id="eventsListFull"></div>
     </div>
@@ -525,6 +521,7 @@ function buildSectionShells(){
         <span id="eventsCalLabel" style="font-weight:600;"></span>
         <button class="btn-ghost" onclick="shiftEventsCalMonth(1)">›</button>
       </div>
+      <div class="cal-weekday-row"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
       <div class="cal-history-grid" id="eventsCalGrid"></div>
       <div id="eventsCalDayDetail" style="margin-top:12px;"></div>
     </div>
@@ -605,12 +602,18 @@ function buildSectionShells(){
         <span id="calHistoryLabel" style="font-weight:600;"></span>
         <button class="btn-ghost" onclick="shiftHistoryMonth(1)">›</button>
       </div>
+      <div class="cal-weekday-row"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
       <div class="cal-history-grid" id="calHistoryGrid"></div>
-      <div style="font-size:11px; color:var(--ink-soft); margin-top:8px;">Tap a day to see what you ate, your weight, and log gym/run</div>
     </div>
 
     <div class="card" style="--spine:var(--c-cal)">
-      <h2>Trends — last 30 days</h2>
+      <h2>Trends</h2>
+      <select id="healthTrendsRange" onchange="setHealthTrendsRange(this.value)" style="margin-bottom:10px;">
+        <option value="30">Last 30 days</option>
+        <option value="60">Last 60 days</option>
+        <option value="90">Last 90 days</option>
+        <option value="180">Last 6 months</option>
+      </select>
       <div style="display:flex; gap:14px; font-size:11px; color:var(--ink-soft); margin-bottom:8px;">
         <span><span style="display:inline-block; width:9px; height:9px; background:var(--c-cal); opacity:.35; border-radius:2px; margin-right:4px;"></span>Calories</span>
         <span><span style="display:inline-block; width:9px; height:2px; background:var(--ink); margin-right:4px; vertical-align:middle;"></span>Weight</span>
@@ -1430,7 +1433,7 @@ function renderEventsCal(){
   if(!grid) return;
   const y = eventsCalMonth.getFullYear(), m = eventsCalMonth.getMonth();
   if(label) label.textContent = eventsCalMonth.toLocaleDateString(undefined,{month:'long', year:'numeric'});
-  const firstDay = new Date(y,m,1).getDay();
+  const firstDay = (new Date(y,m,1).getDay() + 6) % 7; // Monday-first
   const daysInMonth = new Date(y,m+1,0).getDate();
   const byDay = {};
   state.events.forEach(e=>{ (byDay[e.date] = byDay[e.date]||[]).push(e); });
@@ -1470,129 +1473,6 @@ function renderEventsCal(){
   }
 }
 /* ---------- Google Calendar sharing ---------- */
-/* ---------- import events from a Google Calendar .ics export ---------- */
-let icsParsedEvents = [];
-function unfoldIcs(text){
-  // ICS spec: continuation lines start with a single space or tab
-  return text.replace(/\r\n/g,'\n').split('\n').reduce((lines, line)=>{
-    if((line.startsWith(' ') || line.startsWith('\t')) && lines.length){
-      lines[lines.length-1] += line.slice(1);
-    } else {
-      lines.push(line);
-    }
-    return lines;
-  }, []);
-}
-function unescapeIcsText(s){
-  return s.replace(/\\n/gi,' ').replace(/\\,/g,',').replace(/\\;/g,';').replace(/\\\\/g,'\\');
-}
-function parseIcsDateValue(propLine, value){
-  const isAllDay = /VALUE=DATE(?!-TIME)/.test(propLine) || !/T/.test(value);
-  const m = value.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?/);
-  if(!m) return null;
-  if(isAllDay || !m[4]){
-    return { date: `${m[1]}-${m[2]}-${m[3]}`, time: null };
-  }
-  if(m[7]){ // trailing Z — value is UTC, convert to this device's local time
-    const utc = new Date(Date.UTC(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +m[6]));
-    return { date: dateKeyFor(utc.getFullYear(), utc.getMonth(), utc.getDate()), time: String(utc.getHours()).padStart(2,'0')+':'+String(utc.getMinutes()).padStart(2,'0') };
-  }
-  return { date: `${m[1]}-${m[2]}-${m[3]}`, time: `${m[4]}:${m[5]}` };
-}
-function parseIcsFile(text){
-  const lines = unfoldIcs(text);
-  const events = [];
-  let cur = null;
-  for(const line of lines){
-    if(line === 'BEGIN:VEVENT'){ cur = {}; continue; }
-    if(line === 'END:VEVENT'){ if(cur && cur.title && cur.date) events.push(cur); cur = null; continue; }
-    if(!cur) continue;
-    const idx = line.indexOf(':');
-    if(idx < 0) continue;
-    const propPart = line.slice(0, idx);
-    const value = line.slice(idx+1);
-    const propName = propPart.split(';')[0];
-    if(propName === 'SUMMARY') cur.title = unescapeIcsText(value);
-    else if(propName === 'DTSTART'){ const d = parseIcsDateValue(propPart, value); if(d){ cur.date = d.date; cur.time = d.time; } }
-    else if(propName === 'DTEND'){ const d = parseIcsDateValue(propPart, value); if(d && d.time) cur.endTime = d.time; }
-  }
-  return events;
-}
-function handleIcsFile(evt){
-  const file = evt.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = ()=>{
-    icsParsedEvents = parseIcsFile(reader.result);
-    icsPreviewMonth = new Date(); // default to the current month
-    renderIcsPreview();
-  };
-  reader.readAsText(file);
-}
-let icsPreviewMonth = new Date();
-function shiftIcsPreviewMonth(delta){
-  icsPreviewMonth.setMonth(icsPreviewMonth.getMonth()+delta);
-  renderIcsPreview();
-}
-function renderIcsPreview(){
-  const el = document.getElementById('icsPreview');
-  if(!el) return;
-  if(!icsParsedEvents.length){ el.innerHTML = '<div class="empty">No events found in that file.</div>'; return; }
-
-  const y = icsPreviewMonth.getFullYear(), m = icsPreviewMonth.getMonth();
-  const monthLabel = icsPreviewMonth.toLocaleDateString(undefined,{month:'long', year:'numeric'});
-  const inMonth = icsParsedEvents
-    .map((e,i)=>({...e, idx:i}))
-    .filter(e=>{ const d = new Date(e.date+'T00:00:00'); return d.getFullYear()===y && d.getMonth()===m; })
-    .sort((a,b)=>a.date.localeCompare(b.date));
-
-  const nav = `
-    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-      <button class="btn-ghost" onclick="shiftIcsPreviewMonth(-1)">‹</button>
-      <span style="font-weight:600;">${monthLabel}</span>
-      <button class="btn-ghost" onclick="shiftIcsPreviewMonth(1)">›</button>
-    </div>`;
-
-  if(!inMonth.length){
-    el.innerHTML = nav + '<div class="empty">No events found in that month.</div>';
-    return;
-  }
-
-  const rows = inMonth.map(e=>{
-    const d = new Date(e.date+'T00:00:00');
-    const dateLabel = d.toLocaleDateString(undefined,{month:'short', day:'numeric'});
-    return `<label class="item" style="cursor:pointer;">
-      <input type="checkbox" class="ics-check" data-idx="${e.idx}" checked style="width:auto;">
-      <div class="text">${escapeHtml(e.title)} <span style="color:var(--ink-soft); font-size:12px;">· ${dateLabel}${e.time ? ' · '+e.time : ''}</span></div>
-    </label>`;
-  }).join('');
-
-  el.innerHTML = nav + `
-    <div style="display:flex; gap:8px; margin-bottom:10px;">
-      <button class="btn-ghost" onclick="setAllIcsChecks(true)">Select all</button>
-      <button class="btn-ghost" onclick="setAllIcsChecks(false)">Select none</button>
-    </div>
-    ${rows}
-    <button class="btn btn-full" style="--btn-color:var(--c-events); margin-top:10px;" onclick="importSelectedIcs()">Import selected</button>
-  `;
-}
-function setAllIcsChecks(checked){
-  document.querySelectorAll('.ics-check').forEach(cb=>cb.checked = checked);
-}
-function importSelectedIcs(){
-  const checked = Array.from(document.querySelectorAll('.ics-check:checked')).map(cb=>parseInt(cb.dataset.idx));
-  if(!checked.length){ alert('Select at least one event to import.'); return; }
-  checked.forEach(i=>{
-    const e = icsParsedEvents[i];
-    state.events.push({id:uid(), title:e.title, date:e.date, time:e.time||'', endTime:e.endTime||''});
-  });
-  sset('events:list', state.events);
-  icsParsedEvents = [];
-  document.getElementById('icsFileInput').value = '';
-  document.getElementById('icsPreview').innerHTML = `<div class="empty">Imported ${checked.length} event${checked.length===1?'':'s'}.</div>`;
-  renderEvents();
-}
-
 function googleCalLink(e){
   const dateStr = e.date.replace(/-/g,'');
   let datesParam;
@@ -1968,7 +1848,7 @@ function renderCalHistory(){
   if(!el) return;
   const y = historyMonth.getFullYear(), m = historyMonth.getMonth();
   if(label) label.textContent = historyMonth.toLocaleDateString(undefined,{month:'long', year:'numeric'});
-  const firstDay = new Date(y,m,1).getDay();
+  const firstDay = (new Date(y,m,1).getDay() + 6) % 7; // Monday-first
   const daysInMonth = new Date(y,m+1,0).getDate();
   let cells = '';
   for(let i=0;i<firstDay;i++) cells += '<div class="hist-cell empty-cell"></div>';
@@ -1993,11 +1873,16 @@ function renderCalHistory(){
   renderHealthTrends();
 }
 
+let healthTrendsRangeDays = 30;
+function setHealthTrendsRange(days){
+  healthTrendsRangeDays = parseInt(days);
+  renderHealthTrends();
+}
 function renderHealthTrends(){
   const el = document.getElementById('healthTrendsChart');
   if(!el) return;
 
-  const N = 30;
+  const N = healthTrendsRangeDays;
   const today0 = new Date(); today0.setHours(0,0,0,0);
   const days = [];
   for(let i=N-1; i>=0; i--){
@@ -2008,15 +1893,17 @@ function renderHealthTrends(){
     const act = state.activities[key];
     days.push({ key, date:d, kcal, weight: w ? w.value : null, gym: !!(act&&act.gym), run: !!(act&&act.run) });
   }
+  // days[0] is the oldest day in range, days[days.length-1] is today — chart reads left (oldest) to right (today)
 
-  const W = 320, H = 150;
+  const W = 320, H = 168;
   const padL = 8, padR = 8, padT = 8;
   const plotW = W - padL - padR;
   const barAreaTop = padT, barAreaBottom = 96;
-  const markerY = 112;
-  const labelY = 140;
+  const gymY = 110, runY = 122;
+  const labelY = 138;
+  const rangeLabelY = 158;
   const colW = plotW / N;
-  const barW = Math.max(2, colW*0.6);
+  const barW = Math.max(1, colW*0.6);
 
   const maxKcal = Math.max(...days.map(d=>d.kcal), 1);
   const kcalScale = v => barAreaBottom - (v/maxKcal) * (barAreaBottom-barAreaTop);
@@ -2032,7 +1919,6 @@ function renderHealthTrends(){
   const weightScale = v => barAreaBottom - ((v-minW)/(maxW-minW)) * (barAreaBottom-barAreaTop);
 
   let svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%; height:auto; display:block;">`;
-  // baseline
   svg += `<line x1="${padL}" y1="${barAreaBottom}" x2="${W-padR}" y2="${barAreaBottom}" stroke="var(--line)" stroke-width="1"/>`;
 
   // calorie bars
@@ -2062,21 +1948,25 @@ function renderHealthTrends(){
     });
   }
 
-  // gym/run markers below the baseline
+  // gym and run each get their own fixed row, so a day with both still lines up correctly under its column
   days.forEach((d,i)=>{
-    if(!d.gym && !d.run) return;
     const x = padL + i*colW + colW/2;
-    const icon = d.gym && d.run ? '💪🏃' : (d.gym ? '💪' : '🏃');
-    svg += `<text x="${x.toFixed(1)}" y="${markerY}" font-size="7" text-anchor="middle">${icon}</text>`;
+    if(d.gym) svg += `<text x="${x.toFixed(1)}" y="${gymY}" font-size="7" text-anchor="middle">💪</text>`;
+    if(d.run) svg += `<text x="${x.toFixed(1)}" y="${runY}" font-size="7" text-anchor="middle">🏃</text>`;
   });
 
-  // sparse date labels, roughly every 5 days
+  // sparse date labels, spaced out based on how many days are shown
+  const labelEvery = Math.max(1, Math.ceil(N/6));
   days.forEach((d,i)=>{
-    if(i % 5 !== 0 && i !== N-1) return;
+    if(i % labelEvery !== 0 && i !== N-1) return;
     const x = padL + i*colW + colW/2;
     const label = d.date.toLocaleDateString(undefined,{month:'numeric', day:'numeric'});
     svg += `<text x="${x.toFixed(1)}" y="${labelY}" font-size="7" fill="var(--ink-soft)" text-anchor="middle">${label}</text>`;
   });
+
+  // explicit reading-direction labels, so it's unambiguous which end is which
+  svg += `<text x="${padL}" y="${rangeLabelY}" font-size="7.5" fill="var(--ink-faint)" text-anchor="start">${N} days ago</text>`;
+  svg += `<text x="${W-padR}" y="${rangeLabelY}" font-size="7.5" fill="var(--ink-faint)" text-anchor="end">Today →</text>`;
 
   svg += `</svg>`;
 
