@@ -218,10 +218,18 @@
     position:fixed; inset:0; background:rgba(46,42,34,.45); z-index:300;
     display:flex; align-items:flex-end; justify-content:center;
   }
+  .modal-overlay.modal-overlay-full{ align-items:stretch; justify-content:stretch; }
   .modal-card{
     background:var(--paper); width:100%; max-width:480px; border-radius:20px 20px 0 0;
     padding:20px; max-height:85vh; overflow-y:auto;
   }
+  .modal-card.modal-card-full{
+    max-width:100%; height:100dvh; max-height:100dvh; border-radius:0;
+    display:flex; flex-direction:column; overflow:hidden;
+    padding:calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+  }
+  .modal-card-full .chat-log{ flex:1; overflow-y:auto; min-height:0; }
+  .modal-card-full .chat-input-row{ flex-shrink:0; }
   .modal-header{display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;}
   .modal-close{background:none; border:none; font-size:24px; line-height:1; color:var(--ink-soft); padding:4px 8px;}
 </style>
@@ -230,8 +238,8 @@
 
 <button class="assistant-fab" id="assistantFab" onclick="openAssistantModal()" aria-label="Assistant">＋</button>
 
-<div class="modal-overlay" id="assistantModal" style="display:none;" onclick="if(event.target===this) closeAssistantModal()">
-  <div class="modal-card">
+<div class="modal-overlay modal-overlay-full" id="assistantModal" style="display:none;" onclick="if(event.target===this) closeAssistantModal()">
+  <div class="modal-card modal-card-full">
     <div class="modal-header">
       <h2 style="margin:0; display:flex; align-items:center; gap:8px;"><span style="width:9px; height:9px; border-radius:50%; background:var(--c-assistant); display:inline-block;"></span>Assistant</h2>
       <button class="modal-close" onclick="closeAssistantModal()">×</button>
@@ -759,8 +767,10 @@ function buildSectionShells(){
 /* ---------- assistant: AI chat, opened via the + button ---------- */
 function openAssistantModal(){
   document.getElementById('assistantModal').style.display = 'flex';
-  const log = document.getElementById('chatLog');
-  if(log) log.scrollTop = log.scrollHeight;
+  requestAnimationFrame(()=>{
+    const log = document.getElementById('chatLog');
+    if(log) log.scrollTop = log.scrollHeight;
+  });
 }
 function closeAssistantModal(){
   document.getElementById('assistantModal').style.display = 'none';
