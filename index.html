@@ -199,7 +199,10 @@
   .chat-msg.assistant{align-self:flex-start; background:var(--cream); border:1px solid var(--line); border-bottom-left-radius:4px;}
   .chat-input-row{display:flex; flex-direction:column; gap:10px; margin-top:12px;}
   .chat-input-row input{width:100%;}
-  .chat-input-actions{display:flex; gap:10px;}
+  .chat-input-actions{display:flex; flex-wrap:wrap; gap:8px;}
+  .chat-input-actions .chat-send-btn{flex:1 1 100%; order:5;}
+  .chat-image-preview{display:flex; align-items:center; gap:10px; padding:8px 10px; background:var(--cream); border-radius:12px; margin-bottom:8px;}
+  .chat-image-preview img{width:44px; height:44px; object-fit:cover; border-radius:8px;}
   .chat-send-btn{
     flex:1; height:52px; border-radius:16px; background:var(--c-assistant); color:#fff;
     font-size:15.5px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:8px;
@@ -244,9 +247,14 @@
       <button class="modal-close" onclick="closeAssistantModal()">×</button>
     </div>
     <div class="chat-log" id="chatLog"></div>
+    <div class="chat-image-preview" id="chatImagePreview" style="display:none;"></div>
     <div class="chat-input-row">
       <input type="text" id="chatInput" placeholder="Ask me anything…" onkeydown="if(event.key==='Enter') sendChat()">
       <div class="chat-input-actions">
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;" onchange="handleImageAttach(event)">
+        <input type="file" id="galleryInput" accept="image/*" style="display:none;" onchange="handleImageAttach(event)">
+        <button class="mic-btn" title="Take a photo" onclick="document.getElementById('cameraInput').click()">📷</button>
+        <button class="mic-btn" title="Attach a photo" onclick="document.getElementById('galleryInput').click()">📎</button>
         <button class="mic-btn" id="micChat" style="--mic-color:var(--c-assistant)" onclick="voiceChat()">🎙️</button>
         <button class="chat-send-btn" onclick="sendChat()">Send ➤</button>
       </div>
@@ -788,17 +796,122 @@ function getRecognition(interim){
 const WORKER_URL = 'https://chronitical-ai.michenet-kevin.workers.dev';
 const CHRONITICAL_APP_TOKEN = 'x7Kp2mQ9vLwZ4rT8';
 
-async function callAssistant(messages){
+/* ---------- assistant action execution — the AI never touches app data directly;
+   it only requests an action, and this dispatcher performs it using the same
+   logic as the real UI forms. ---------- */
+function logActivityForDate(dateKey, activityType){
+  const a = state.activities[dateKey] || {gym:false, run:false};
+  if(activityType==='gym') a.gym = true;
+  else if(activityType==='run') a.run = true;
+  state.activities[dateKey] = a;
+  sset('activities:log', state.activities);
+  renderCalHistory();
+}
+function executeAssistantAction(action, params){
+  if(!action || !params) return null;
+  try{
+    switch(action){
+      case 'add_todo': {
+        if(!params.text) return null;
+        const maxOrder = state.todos.reduce((m,t)=>Math.max(m, t.order||0), -1);
+        state.todos.push({id:uid(), text:params.text, done:false, dueDate:params.dueDate||null, asap:!!params.asap, order:maxOrder+1});
+        sset('todos:all', state.todos);
+        renderTodoList(); renderTodayTodos();
+        return 'todo';
+      }
+      case 'add_event': {
+        if(!params.title || !params.date) return null;
+        state.events.push({id:uid(), title:params.title, date:params.date, time:params.time||'', endTime:params.endTime||''});
+        sset('events:list', state.events);
+        renderEvents();
+        return 'event';
+      }
+      case 'add_birthday': {
+        if(!params.name || !params.date) return null;
+        state.bdays.push({id:uid(), name:params.name, date:params.date});
+        sset('bdays:list', state.bdays);
+        renderBdays();
+        return 'birthday';
+      }
+      case 'add_calorie': {
+        if(!params.name || typeof params.kcal !== 'number') return null;
+        if(!state.calories[TODAY]) state.calories[TODAY] = [];
+        state.calories[TODAY].push({id:uid(), name:params.name, kcal:params.kcal, qty:params.qty||null, unit:params.unit||null});
+        sset('cal:log', state.calories);
+        renderCalories(); renderCalHistory();
+        return 'calorie';
+      }
+      case 'add_weight': {
+        if(typeof params.value !== 'number') return null;
+        const now = new Date();
+        const time = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+        state.weights[TODAY] = { value: params.value, unit: params.unit||'kg', time };
+        sset('weights:log', state.weights);
+        renderWeightToday(); renderCalHistory();
+        return 'weight';
+      }
+      case 'log_activity': {
+        if(!params.activityType) return null;
+        logActivityForDate(params.date || TODAY, params.activityType);
+        return 'activity';
+      }
+      case 'add_culture': {
+        if(!params.title || !params.type) return null;
+        state.culture.push({id:uid(), title:params.title, type:params.type, kind:params.kind||null, done:false});
+        sset('culture:list', state.culture);
+        renderCulture();
+        return 'culture';
+      }
+      case 'add_grocery': {
+        if(!params.name) return null;
+        state.groceries.push({id:uid(), name:params.name, done:false});
+        sset('groceries:list', state.groceries);
+        renderGroceries();
+        return 'grocery';
+      }
+      case 'add_place': {
+        if(!params.name) return null;
+        state.places.push({id:uid(), name:params.name, category:params.category||'other', done:false, rating:null});
+        sset('places:list', state.places);
+        renderPlaces();
+        return 'place';
+      }
+      case 'add_note': {
+        if(!params.title && !params.body) return null;
+        state.notes.unshift({id:uid(), title:params.title||'', body:params.body||'', ts:Date.now()});
+        sset('notes:list', state.notes);
+        renderNotes();
+        return 'note';
+      }
+      case 'add_idea': {
+        if(!params.title && !params.body) return null;
+        state.ideas.unshift({id:uid(), title:params.title||'', body:params.body||'', ts:Date.now()});
+        sset('ideas:list', state.ideas);
+        renderIdeas();
+        return 'idea';
+      }
+      default:
+        return null;
+    }
+  }catch(e){
+    console.error('Assistant action failed', action, params, e);
+    return null;
+  }
+}
+
+async function callAssistant(messages, imageData){
   if(!WORKER_URL || !CHRONITICAL_APP_TOKEN){
     throw new Error('NOT_CONFIGURED');
   }
+  const payload = { messages };
+  if(imageData){ payload.image = imageData.base64; payload.imageMediaType = imageData.mediaType; }
   const response = await fetch(WORKER_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-App-Token': CHRONITICAL_APP_TOKEN,
     },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify(payload),
   });
   if(!response.ok){
     if(response.status === 401){
@@ -811,8 +924,7 @@ async function callAssistant(messages){
     err.status = response.status;
     throw err;
   }
-  const data = await response.json();
-  return data.reply || '';
+  return await response.json(); // { action, params, reply }
 }
 function renderChat(){
   const el = document.getElementById('chatLog');
@@ -821,19 +933,28 @@ function renderChat(){
     <div class="chat-msg ${m.role}">${escapeHtml(m.content)}</div>`).join('');
   el.scrollTop = el.scrollHeight;
 }
+let pendingImage = null; // {base64, mediaType, previewUrl}
 async function sendChat(){
   const input = document.getElementById('chatInput');
   const text = input.value.trim();
-  if(!text) return;
+  if(!text && !pendingImage) return;
   input.value='';
-  state.chatHistory.push({role:'user', content:text});
+  const userMsg = { role:'user', content: text || '(photo attached)' };
+  state.chatHistory.push(userMsg);
+  const imageToSend = pendingImage;
+  clearPendingImage();
   renderChat();
   const status = document.getElementById('voiceStatusChat');
   status.textContent = 'Thinking…';
   try{
     const apiMessages = state.chatHistory.map(m=>({role:m.role, content:m.content}));
-    const reply = await callAssistant(apiMessages);
-    state.chatHistory.push({role:'assistant', content: reply || "Sorry, I didn't catch that."});
+    const result = await callAssistant(apiMessages, imageToSend);
+    const actionKind = executeAssistantAction(result.action, result.params);
+    let replyText = result.reply || "Sorry, I didn't catch that.";
+    if(actionKind && !result.reply){
+      replyText = 'Done!';
+    }
+    state.chatHistory.push({role:'assistant', content: replyText});
   }catch(e){
     let msg;
     if(e && e.message === 'NOT_CONFIGURED'){
@@ -850,6 +971,42 @@ async function sendChat(){
   status.textContent = '';
   sset('chat:history', state.chatHistory);
   renderChat();
+}
+function fileToBase64(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const result = reader.result; // data:image/jpeg;base64,XXXX
+      const base64 = result.split(',')[1];
+      resolve({ base64, mediaType: file.type || 'image/jpeg' });
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+async function handleImageAttach(evt){
+  const file = evt.target.files[0];
+  evt.target.value = ''; // allow picking the same file again later
+  if(!file) return;
+  const { base64, mediaType } = await fileToBase64(file);
+  pendingImage = { base64, mediaType, previewUrl: URL.createObjectURL(file) };
+  renderPendingImagePreview();
+}
+function clearPendingImage(){
+  if(pendingImage && pendingImage.previewUrl) URL.revokeObjectURL(pendingImage.previewUrl);
+  pendingImage = null;
+  renderPendingImagePreview();
+}
+function renderPendingImagePreview(){
+  const el = document.getElementById('chatImagePreview');
+  if(!el) return;
+  if(!pendingImage){ el.innerHTML = ''; el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  el.innerHTML = `
+    <img src="${pendingImage.previewUrl}" alt="Attached photo">
+    <span style="flex:1; font-size:12.5px; color:var(--ink-soft);">Photo attached — describe it or just hit Send</span>
+    <button class="btn-ghost" onclick="clearPendingImage()">×</button>
+  `;
 }
 function voiceChat(){
   const btn = document.getElementById('micChat');
