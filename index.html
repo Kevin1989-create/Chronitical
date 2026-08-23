@@ -42,7 +42,8 @@
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;background:var(--cream);color:var(--ink);height:100%;font-family:'Inter',sans-serif;}
-  body{min-height:100vh; padding-bottom:24px;}
+  html{overflow-x:hidden;}
+  body{min-height:100vh; padding-bottom:24px; overflow-x:hidden;}
   .num{font-family:'JetBrains Mono',monospace;}
   .ring-label .num{font-family:'Inter',sans-serif;} /* JetBrains Mono draws '0' with a dot inside it by design — avoid that here */
   h1,h2,h3{font-family:'Fraunces',serif; margin:0;}
@@ -152,6 +153,10 @@
   .cal-history-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:5px;}
   .cal-weekday-row{display:grid; grid-template-columns:repeat(7,1fr); gap:5px; margin-bottom:5px;}
   .cal-weekday-row span{text-align:center; font-size:10px; font-weight:600; color:var(--ink-soft); text-transform:uppercase;}
+  .cal-history-grid-total{display:grid; grid-template-columns:repeat(7,1fr) 1.15fr; gap:5px;}
+  .cal-weekday-row-total{display:grid; grid-template-columns:repeat(7,1fr) 1.15fr; gap:5px; margin-bottom:5px;}
+  .hist-total-cell{aspect-ratio:1; display:flex; align-items:center; justify-content:center; border-radius:9px; background:var(--c-cal); color:#fff; font-family:'JetBrains Mono',monospace; font-weight:700; font-size:10.5px; padding:2px;}
+  .hist-total-cell.empty-cell{background:transparent;}
   .hist-cell{aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding-top:7px; border-radius:9px; background:var(--cream); font-size:11px; cursor:pointer;}
   .hist-top-row{display:grid; grid-template-columns:13px 1fr 13px; align-items:center; width:100%; height:14px;}
   .hist-icon-left{font-size:9px; text-align:left; line-height:14px;}
@@ -193,8 +198,8 @@
   .voice-status{font-size:12.5px; color:var(--ink-soft); margin-top:8px; min-height:16px;}
 
   /* chat */
-  .chat-log{display:flex; flex-direction:column; gap:10px; margin-bottom:4px; padding:2px;}
-  .chat-msg{max-width:82%; padding:11px 15px; border-radius:16px; font-size:14.5px; line-height:1.45; box-shadow:0 1px 2px rgba(46,42,34,0.06);}
+  .chat-log{display:flex; flex-direction:column; gap:10px; margin-bottom:4px; padding:2px; overflow-x:hidden;}
+  .chat-msg{max-width:82%; padding:11px 15px; border-radius:16px; font-size:14.5px; line-height:1.45; box-shadow:0 1px 2px rgba(46,42,34,0.06); overflow-wrap:break-word; word-break:break-word;}
   .chat-msg.user{align-self:flex-end; background:var(--c-assistant); color:#fff; border-bottom-right-radius:4px;}
   .chat-msg.assistant{align-self:flex-start; background:var(--cream); border:1px solid var(--line); border-bottom-left-radius:4px;}
   .chat-input-row{display:flex; flex-direction:column; gap:10px; margin-top:12px;}
@@ -462,8 +467,13 @@ function buildSectionShells(){
     </div>
 
     <div class="card" style="--spine:var(--c-todo)">
-      <h2>To-do</h2>
+      <h2 onclick="handleTabClick('todo')" style="cursor:pointer;">To-do</h2>
       <div id="dailyListToday"></div>
+    </div>
+
+    <div class="card" style="--spine:var(--c-groceries)">
+      <h2 onclick="handleTabClick('groceries')" style="cursor:pointer;">Shopping</h2>
+      <div id="shoppingHomeList"></div>
     </div>
 
     <div class="card" style="--spine:var(--c-cal)">
@@ -603,8 +613,8 @@ function buildSectionShells(){
         <span id="calHistoryLabel" style="font-weight:600;"></span>
         <button class="btn-ghost" onclick="shiftHistoryMonth(1)">›</button>
       </div>
-      <div class="cal-weekday-row"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
-      <div class="cal-history-grid" id="calHistoryGrid"></div>
+      <div class="cal-weekday-row-total"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span><span>Total</span></div>
+      <div class="cal-history-grid-total" id="calHistoryGrid"></div>
     </div>
 
     <div class="card" style="--spine:var(--c-cal)">
@@ -1647,8 +1657,9 @@ function renderCalHistory(){
   if(label) label.textContent = historyMonth.toLocaleDateString(undefined,{month:'long', year:'numeric'});
   const firstDay = (new Date(y,m,1).getDay() + 6) % 7; // Monday-first
   const daysInMonth = new Date(y,m+1,0).getDate();
-  let cells = '';
-  for(let i=0;i<firstDay;i++) cells += '<div class="hist-cell empty-cell"></div>';
+
+  const dayEntries = []; // {html, kcal} — kcal 0 for empty padding cells
+  for(let i=0;i<firstDay;i++) dayEntries.push({ html: '<div class="hist-cell empty-cell"></div>', kcal: 0 });
   for(let d=1; d<=daysInMonth; d++){
     const key = dateKeyFor(y,m,d);
     const entries = state.calories[key]||[];
@@ -1656,7 +1667,7 @@ function renderCalHistory(){
     const isToday = key===TODAY;
     const act = state.activities[key];
     const w = state.weights[key];
-    cells += `<div class="hist-cell ${isToday?'hist-today':''} ${total?'hist-has':''}" onclick="openDayDetail('${key}')" title="Tap to see details">
+    const html = `<div class="hist-cell ${isToday?'hist-today':''} ${total?'hist-has':''}" onclick="openDayDetail('${key}')" title="Tap to see details">
       <div class="hist-top-row">
         <span class="hist-icon-left">${act?.gym ? '💪' : ''}</span>
         <span class="hist-day">${d}</span>
@@ -1665,6 +1676,18 @@ function renderCalHistory(){
       <div class="hist-kcal">${total ? total : ''}</div>
       <div class="hist-weight">${w ? w.value+w.unit : ''}</div>
     </div>`;
+    dayEntries.push({ html, kcal: total });
+  }
+  // pad the final week so every row has exactly 7 day-slots before the Total column
+  while(dayEntries.length % 7 !== 0) dayEntries.push({ html: '<div class="hist-cell empty-cell"></div>', kcal: 0 });
+
+  let cells = '';
+  for(let i=0; i<dayEntries.length; i+=7){
+    const week = dayEntries.slice(i, i+7);
+    cells += week.map(e=>e.html).join('');
+    const weekTotal = week.reduce((s,e)=>s+e.kcal, 0);
+    const weekHasAnyRealDay = week.some(e=>!e.html.includes('empty-cell'));
+    cells += `<div class="hist-total-cell ${weekHasAnyRealDay ? '' : 'empty-cell'}">${weekHasAnyRealDay ? (weekTotal || 0) : ''}</div>`;
   }
   el.innerHTML = cells;
   renderHealthTrends();
@@ -2047,7 +2070,18 @@ function saveEditGrocery(id){
   editingGroceryId = null;
   renderGroceries();
 }
+function renderShoppingHome(){
+  const list = state.groceries.filter(t=>!t.done);
+  const el = document.getElementById('shoppingHomeList');
+  if(!el) return;
+  el.innerHTML = list.length ? list.map(t=>`
+    <div class="row">
+      <div class="row-info"><b>${escapeHtml(t.name)}</b></div>
+      <button class="check" style="--check-color:var(--c-groceries)" onclick="toggleGroceryItem('${t.id}')"></button>
+    </div>`).join('') : '<div class="empty">Nothing on your shopping list.</div>';
+}
 function renderGroceries(){
+  renderShoppingHome();
   const el = document.getElementById('groceriesList');
   if(!el) return;
   if(!state.groceries.length){ el.innerHTML = '<div class="empty">List is empty.</div>'; return; }
