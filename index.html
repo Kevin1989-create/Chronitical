@@ -48,9 +48,9 @@
   .ring-label .num{font-family:'Inter',sans-serif;} /* JetBrains Mono draws '0' with a dot inside it by design — avoid that here */
   h1,h2,h3{font-family:'Fraunces',serif; margin:0;}
 
+  .frozen-top{position:sticky; top:0; z-index:6; background:var(--cream);}
   header.top{
     padding:26px 20px 14px;
-    position:sticky; top:0; z-index:6;
     background:var(--cream);
   }
   .brand-row{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:2px;}
@@ -60,7 +60,7 @@
 
   .tabstrip{
     display:flex; flex-wrap:wrap; gap:6px; padding:12px 20px 6px;
-    position:sticky; top:78px; z-index:5; background:var(--cream);
+    background:var(--cream);
   }
   .tabchip{
     flex:0 0 auto; display:flex; align-items:center; gap:6px;
@@ -271,6 +271,7 @@
   </div>
 </div>
 
+<div class="frozen-top">
 <header class="top">
   <div class="brand-row">
     <span class="date" id="todayDate">—</span>
@@ -282,6 +283,7 @@
   <button class="btn-ghost" id="tabReorderToggle" onclick="toggleTabReorder()" style="font-size:12px;">⇄ Reorder sections</button>
 </div>
 <div class="tabstrip" id="tabstrip"></div>
+</div>
 
 <main id="sections"></main>
 
