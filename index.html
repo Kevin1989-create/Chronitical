@@ -43,12 +43,12 @@
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;background:var(--cream);color:var(--ink);height:100%;font-family:'Inter',sans-serif;}
   html{overflow-x:hidden;}
-  body{min-height:100vh; padding-bottom:240px; overflow-x:hidden;}
+  body{min-height:100vh; padding-bottom:24px; overflow-x:hidden;}
   .num{font-family:'JetBrains Mono',monospace;}
   .ring-label .num{font-family:'Inter',sans-serif;} /* JetBrains Mono draws '0' with a dot inside it by design — avoid that here */
   h1,h2,h3{font-family:'Fraunces',serif; margin:0;}
 
-  .frozen-top{position:sticky; top:0; z-index:6; background:var(--cream);}
+  .frozen-top{position:fixed; top:0; left:0; right:0; z-index:6; background:var(--cream);}
   header.top{
     padding:26px 20px 14px;
     background:var(--cream);
@@ -202,6 +202,13 @@
   /* chat */
   .chat-log{display:flex; flex-direction:column; gap:10px; margin-bottom:4px; padding:2px; overflow-x:hidden;}
   .chat-msg{max-width:82%; padding:11px 15px; border-radius:16px; font-size:14.5px; line-height:1.45; box-shadow:0 1px 2px rgba(46,42,34,0.06); overflow-wrap:break-word; word-break:break-word;}
+  .chat-thinking{display:flex; align-items:center; justify-content:center; padding:12px 18px;}
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  .spinner{
+    display:inline-block; width:16px; height:16px;
+    border:2.5px solid var(--line); border-top-color:var(--c-assistant);
+    border-radius:50%; animation:spin 0.7s linear infinite;
+  }
   .chat-msg.user{align-self:flex-end; background:var(--c-assistant); color:#fff; border-bottom-right-radius:4px;}
   .chat-msg.assistant{align-self:flex-start; background:var(--cream); border:1px solid var(--line); border-bottom-left-radius:4px;}
   .chat-input-row{display:flex; flex-direction:column; gap:10px; margin-top:12px;}
@@ -241,7 +248,7 @@
   .modal-card-full .chat-log{ flex:1; overflow-y:auto; min-height:0; }
   .modal-card-full .chat-input-row{ flex-shrink:0; }
   .modal-header{display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;}
-  .modal-close{background:none; border:none; font-size:24px; line-height:1; color:var(--ink-soft); padding:4px 8px;}
+  .modal-close{background:none; border:none; font-size:34px; line-height:1; color:var(--ink-soft); padding:8px 12px;}
 </style>
 </head>
 <body>
@@ -285,7 +292,7 @@
 <div class="tabstrip" id="tabstrip"></div>
 </div>
 
-<main id="sections"></main>
+<main id="sections" style="padding-top:240px;"></main>
 
 <script>
 // Clickjacking mitigation: GitHub Pages serves static files with no way to set
@@ -403,9 +410,10 @@ function buildTabstrip(){
 }
 function syncBodyPaddingToFrozenHeader(){
   requestAnimationFrame(()=>{
-    const el = document.querySelector('.frozen-top');
-    if(!el) return;
-    document.body.style.paddingBottom = (el.offsetHeight + 24) + 'px';
+    const header = document.querySelector('.frozen-top');
+    const main = document.getElementById('sections');
+    if(!header || !main) return;
+    main.style.paddingTop = (header.offsetHeight + 16) + 'px';
   });
 }
 window.addEventListener('resize', syncBodyPaddingToFrozenHeader);
@@ -969,8 +977,7 @@ async function sendChat(){
   const imageToSend = pendingImage;
   clearPendingImage();
   renderChat();
-  const status = document.getElementById('voiceStatusChat');
-  status.textContent = 'Thinking…';
+  showThinkingBubble();
   try{
     const apiMessages = state.chatHistory.map(m=>({role:m.role, content:m.content}));
     const result = await callAssistant(apiMessages, imageToSend);
@@ -993,9 +1000,19 @@ async function sendChat(){
     }
     state.chatHistory.push({role:'assistant', content: msg});
   }
-  status.textContent = '';
+  hideThinkingBubble();
   sset('chat:history', state.chatHistory);
   renderChat();
+}
+function showThinkingBubble(){
+  const el = document.getElementById('chatLog');
+  if(!el) return;
+  el.insertAdjacentHTML('beforeend', `<div class="chat-msg assistant chat-thinking" id="thinkingBubble"><span class="spinner"></span></div>`);
+  el.scrollTop = el.scrollHeight;
+}
+function hideThinkingBubble(){
+  const el = document.getElementById('thinkingBubble');
+  if(el) el.remove();
 }
 function fileToBase64(file){
   return new Promise((resolve, reject)=>{
