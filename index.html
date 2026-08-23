@@ -1960,6 +1960,9 @@ function ratingOptionsHTML(current){
   for(let i=1;i<=10;i++) opts += `<option value="${i}" ${current===i?'selected':''}>${i}</option>`;
   return opts;
 }
+function googleMapsLink(name){
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}`;
+}
 function renderPlaces(){
   const wantEl = document.getElementById('placesWantList');
   const beenEl = document.getElementById('placesBeenList');
@@ -1982,6 +1985,7 @@ function renderPlaces(){
       <span class="drag-handle place-drag-handle">⠿</span>
       <div class="text">${escapeHtml(t.name)} <span style="color:var(--ink-soft); font-size:12px;">· ${PLACE_LABELS[t.category]||t.category}</span></div>
       ${t.done ? `<select onchange="setPlaceRating('${t.id}', this.value)" style="width:auto; padding:4px 6px; font-size:12px;">${ratingOptionsHTML(t.rating)}</select>` : ''}
+      <a class="btn-ghost" href="${googleMapsLink(t.name)}" target="_blank" rel="noopener" title="Open in Google Maps">🗺️</a>
       <button class="btn-ghost" onclick="startEditPlace('${t.id}')">Edit</button>
       <button class="btn-ghost" onclick="deletePlaceItem('${t.id}')">×</button>
     </div>`;
