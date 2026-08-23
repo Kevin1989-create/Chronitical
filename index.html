@@ -43,7 +43,7 @@
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;background:var(--cream);color:var(--ink);height:100%;font-family:'Inter',sans-serif;}
   html{overflow-x:hidden;}
-  body{min-height:100vh; padding-bottom:24px; overflow-x:hidden;}
+  body{min-height:100vh; padding-bottom:240px; overflow-x:hidden;}
   .num{font-family:'JetBrains Mono',monospace;}
   .ring-label .num{font-family:'Inter',sans-serif;} /* JetBrains Mono draws '0' with a dot inside it by design — avoid that here */
   h1,h2,h3{font-family:'Fraunces',serif; margin:0;}
@@ -399,7 +399,17 @@ function buildTabstrip(){
     <button class="tabchip ${s.id==='today'?'tabchip-main':''} ${s.id===currentSec?'active':''}" data-sec="${s.id}" style="--chip-color:${s.color}" onclick="handleTabClick('${s.id}')">
       <span class="dot" style="background:${s.color}"></span>${s.label}
     </button>`).join('');
+  syncBodyPaddingToFrozenHeader();
 }
+function syncBodyPaddingToFrozenHeader(){
+  requestAnimationFrame(()=>{
+    const el = document.querySelector('.frozen-top');
+    if(!el) return;
+    document.body.style.paddingBottom = (el.offsetHeight + 24) + 'px';
+  });
+}
+window.addEventListener('resize', syncBodyPaddingToFrozenHeader);
+
 function handleTabClick(sec){
   if(tabReorderMode) return;
   goTo(sec);
