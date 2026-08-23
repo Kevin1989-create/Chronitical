@@ -1133,11 +1133,13 @@ function renderTodayTodos(){
   });
   const el = document.getElementById('dailyListToday');
   if(!el) return;
-  el.innerHTML = list.length ? list.map(t=>`
-    <div class="row">
-      <div class="row-info"><b>${escapeHtml(t.text)}${t.asap ? '<span class="tag-asap">ASAP</span>' : ''}</b>${t.dueDate ? `<span>Due ${fmtDue(t.dueDate)}</span>` : ''}</div>
+  el.innerHTML = list.length ? list.map(t=>{
+    const overdue = t.dueDate && t.dueDate < TODAY;
+    return `<div class="row">
+      <div class="row-info"><b>${escapeHtml(t.text)}${t.asap ? '<span class="tag-asap">ASAP</span>' : ''}</b>${t.dueDate ? `<span style="${overdue ? 'color:var(--c-dates); font-weight:600;' : ''}">Due ${fmtDue(t.dueDate)}</span>` : ''}</div>
       <button class="check" style="--check-color:var(--c-todo)" onclick="toggleTodoItem('${t.id}')"></button>
-    </div>`).join('') : '<div class="empty">Nothing on your to-do list.</div>';
+    </div>`;
+  }).join('') : '<div class="empty">Nothing on your to-do list.</div>';
 }
 
 /* ---------- drag-to-reorder for the To-do section (pointer events; works on touch + mouse) ---------- */
