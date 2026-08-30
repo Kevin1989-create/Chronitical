@@ -159,11 +159,13 @@
   .hist-total-cell{aspect-ratio:auto; min-height:46px; min-width:0; display:flex; align-items:center; justify-content:center; border-radius:9px; background:var(--c-cal); color:#fff; font-family:'JetBrains Mono',monospace; font-weight:700; font-size:9.5px; padding:2px; overflow:hidden;}
   .hist-total-cell.empty-cell{background:transparent;}
   .hist-cell{aspect-ratio:1; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding-top:7px; border-radius:9px; background:var(--cream); font-size:11px; cursor:pointer; overflow:hidden;}
-  .cal-history-grid-total .hist-cell{aspect-ratio:auto; min-height:46px;}
+  .cal-history-grid-total .hist-cell{aspect-ratio:auto; min-height:56px;}
   .hist-top-row{display:grid; grid-template-columns:13px 1fr 13px; align-items:center; width:100%; height:14px;}
   .hist-icon-left{font-size:9px; text-align:left; line-height:14px;}
   .hist-icon-right{font-size:9px; text-align:right; line-height:14px;}
   .hist-day{font-weight:600; color:var(--ink); text-align:center; line-height:14px;}
+  .hist-day-solo{font-weight:600; color:var(--ink); text-align:center; height:14px; line-height:14px;}
+  .hist-sports{height:11px; line-height:11px; font-size:8px; text-align:center; overflow:hidden; white-space:nowrap;}
   .hist-kcal{font-family:'JetBrains Mono',monospace; font-size:9.5px; color:var(--c-cal); height:12px; line-height:12px;}
   .hist-weight{font-size:8.5px; color:var(--ink-soft); line-height:11px; height:11px;}
   .hist-cell.empty-cell{background:transparent;}
@@ -630,7 +632,7 @@ function buildSectionShells(){
           <option value="kg">kg</option>
           <option value="lb">lb</option>
         </select>
-        <button class="btn" style="--btn-color:var(--c-cal)" onclick="logWeightToday()">Log</button>
+        <button class="btn" style="--btn-color:var(--c-cal); padding:0 24px; font-size:15.5px; font-weight:700;" onclick="logWeightToday()">Log</button>
       </div>
       <div id="weightTodayNote" style="font-size:12px; color:var(--ink-soft); margin-top:8px;"></div>
     </div>
@@ -675,9 +677,11 @@ function buildSectionShells(){
       <div style="font-size:12px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px;">Food eaten</div>
       <div id="dayDetailFood"></div>
       <div style="font-size:12px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.06em; margin:16px 0 8px;">Activity</div>
-      <div style="display:flex; gap:8px;">
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <button class="btn-ghost" id="dayDetailGymBtn" onclick="toggleDayActivity('gym')">💪 Gym</button>
         <button class="btn-ghost" id="dayDetailRunBtn" onclick="toggleDayActivity('run')">🏃 Run</button>
+        <button class="btn-ghost" id="dayDetailBballBtn" onclick="toggleDayActivity('basketball')">🏀 Basketball</button>
+        <button class="btn-ghost" id="dayDetailHikeBtn" onclick="toggleDayActivity('hike')">🥾 Hike</button>
       </div>
       <div style="font-size:12px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.06em; margin:16px 0 8px;">Weight</div>
       <div id="dayDetailWeight"></div>
@@ -991,36 +995,77 @@ function renderChat(){
 let pendingImage = null; // {base64, mediaType, previewUrl}
 function buildAssistantContext(){
   const lines = [];
-  const openTodos = state.todos.filter(t=>!t.done)
-    .sort((a,b)=>(a.dueDate||'9999').localeCompare(b.dueDate||'9999'))
-    .slice(0,20);
+  const allTodos = state.todos.slice().sort((a,b)=>(a.dueDate||'9999').localeCompare(b.dueDate||'9999'));
+  const openTodos = allTodos.filter(t=>!t.done).slice(0,30);
   lines.push('OPEN TO-DOS: ' + (openTodos.length ? openTodos.map(t=>
     `"${t.text}"${t.dueDate?` (due ${t.dueDate})`:''}${t.asap?' [ASAP]':''}${t.recurrence?` [repeats ${t.recurrence}]`:''}`).join('; ') : 'none'));
 
   const now = new Date(); now.setHours(0,0,0,0);
   const in14 = new Date(now); in14.setDate(in14.getDate()+14);
+  const past7 = new Date(now); past7.setDate(past7.getDate()-7);
   const upcomingEvents = state.events.filter(e=>{ const d=new Date(e.date+'T00:00:00'); return d>=now && d<=in14; })
     .sort((a,b)=>(a.date+(a.time||'')).localeCompare(b.date+(b.time||'')));
-  lines.push('CALENDAR (next 14 days): ' + (upcomingEvents.length ? upcomingEvents.map(e=>
+  lines.push('CALENDAR (today + next 14 days): ' + (upcomingEvents.length ? upcomingEvents.map(e=>
     `"${e.title}" on ${e.date}${e.time?` at ${e.time}`:''}`).join('; ') : 'nothing scheduled'));
+  const recentPastEvents = state.events.filter(e=>{ const d=new Date(e.date+'T00:00:00'); return d>=past7 && d<now; })
+    .sort((a,b)=>a.date.localeCompare(b.date));
+  lines.push('RECENT PAST EVENTS (last 7 days): ' + (recentPastEvents.length ? recentPastEvents.map(e=>`"${e.title}" on ${e.date}`).join('; ') : 'none'));
 
   const upcomingBdays = state.bdays.filter(b=>daysUntil(b.date)<=30)
     .sort((a,b)=>daysUntil(a.date)-daysUntil(b.date));
   lines.push('BIRTHDAYS (next 30 days): ' + (upcomingBdays.length ? upcomingBdays.map(b=>
-    `${b.name} in ${daysUntil(b.date)} day(s)`).join('; ') : 'none'));
+    `${b.name} in ${daysUntil(b.date)} day(s) (${b.date})`).join('; ') : 'none'));
+  lines.push('ALL BIRTHDAYS ON FILE: ' + (state.bdays.length ? state.bdays.map(b=>`${b.name} (${b.date})`).join('; ') : 'none'));
 
   const todayCal = state.calories[TODAY]||[];
   const todayKcal = todayCal.reduce((s,e)=>s+e.kcal,0);
-  lines.push(`CALORIES TODAY: ${todayKcal} kcal logged (goal ${state.calGoal||2000} kcal), ${todayCal.length} item(s) logged`);
+  lines.push(`CALORIES TODAY: ${todayKcal} kcal logged (goal ${state.calGoal||2000} kcal) — items: ${todayCal.length ? todayCal.map(e=>`${e.name} (${e.kcal} kcal)`).join(', ') : 'none yet'}`);
+
+  const last7Kcal = [];
+  for(let i=1;i<=7;i++){
+    const d = new Date(now); d.setDate(d.getDate()-i);
+    const key = dateKeyFor(d.getFullYear(), d.getMonth(), d.getDate());
+    const kcal = (state.calories[key]||[]).reduce((s,e)=>s+e.kcal,0);
+    if(kcal) last7Kcal.push(`${key}: ${kcal} kcal`);
+  }
+  lines.push('CALORIES LAST 7 DAYS: ' + (last7Kcal.length ? last7Kcal.join('; ') : 'nothing logged'));
 
   const todayWeight = state.weights[TODAY];
+  const allWeightDates = Object.keys(state.weights).sort();
+  const latestWeightDate = allWeightDates[allWeightDates.length-1];
   lines.push('WEIGHT TODAY: ' + (todayWeight ? `${todayWeight.value} ${todayWeight.unit} at ${todayWeight.time}` : 'not logged yet'));
+  lines.push('MOST RECENT WEIGHT ON FILE: ' + (latestWeightDate ? `${state.weights[latestWeightDate].value} ${state.weights[latestWeightDate].unit} on ${latestWeightDate}` : 'none logged ever'));
 
-  const todayActivity = state.activities[TODAY];
-  lines.push('ACTIVITY TODAY: ' + (todayActivity && (todayActivity.gym||todayActivity.run) ? [todayActivity.gym?'gym':null, todayActivity.run?'run':null].filter(Boolean).join(' + ') : 'none logged'));
+  const todayActivity = state.activities[TODAY] || {};
+  const todaySports = ['gym','run','basketball','hike'].filter(s=>todayActivity[s]);
+  lines.push('ACTIVITY TODAY: ' + (todaySports.length ? todaySports.join(' + ') : 'none logged'));
+  let last7SportDays = 0;
+  for(let i=0;i<7;i++){
+    const d = new Date(now); d.setDate(d.getDate()-i);
+    const key = dateKeyFor(d.getFullYear(), d.getMonth(), d.getDate());
+    const a = state.activities[key];
+    if(a && (a.gym||a.run||a.basketball||a.hike)) last7SportDays++;
+  }
+  lines.push(`ACTIVITY LAST 7 DAYS: active on ${last7SportDays} of the last 7 days`);
 
-  const openGroceries = state.groceries.filter(g=>!g.done).slice(0,20);
+  const openGroceries = state.groceries.filter(g=>!g.done).slice(0,25);
   lines.push('SHOPPING LIST: ' + (openGroceries.length ? openGroceries.map(g=>g.name).join(', ') : 'empty'));
+
+  const notWatched = state.culture.filter(c=>!c.done).slice(0,20);
+  lines.push('CULTURE/MEDIA — not yet done: ' + (notWatched.length ? notWatched.map(c=>`"${c.title}" (${c.type})`).join('; ') : 'none'));
+  const doneCulture = state.culture.filter(c=>c.done).length;
+  lines.push(`CULTURE/MEDIA — total items: ${state.culture.length} (${doneCulture} done)`);
+
+  const wantToGo = state.places.filter(p=>!p.done).slice(0,20);
+  const beenTo = state.places.filter(p=>p.done);
+  lines.push('LOCATION — want to go: ' + (wantToGo.length ? wantToGo.map(p=>p.name).join(', ') : 'none'));
+  lines.push('LOCATION — been to: ' + (beenTo.length ? beenTo.map(p=>p.name+(p.rating?` (rated ${p.rating}/10)`:'')).join(', ') : 'none'));
+
+  const recentNotes = state.notes.slice(0,10);
+  lines.push('NOTES (most recent): ' + (recentNotes.length ? recentNotes.map(n=>n.title||n.body.slice(0,40)).join('; ') : 'none'));
+
+  const recentIdeas = state.ideas.slice(0,10);
+  lines.push('IDEAS (most recent): ' + (recentIdeas.length ? recentIdeas.map(i=>i.title||i.body.slice(0,40)).join('; ') : 'none'));
 
   return lines.join('\n');
 }
@@ -1663,18 +1708,99 @@ function openDayDetail(key){
   const d = new Date(key+'T00:00:00');
   document.getElementById('dayDetailTitle').textContent = d.toLocaleDateString(undefined,{weekday:'long', month:'long', day:'numeric'});
 
-  const entries = state.calories[key]||[];
-  const foodEl = document.getElementById('dayDetailFood');
-  foodEl.innerHTML = entries.length ? entries.map(e=>`
-    <div class="log-item">
-      <span>${escapeHtml(e.name)}${e.qty ? ` <span class="meta">· ${fmtQty(e)}</span>` : ''}</span>
-      <span class="amt">${e.kcal}</span>
-    </div>`).join('') : '<div class="empty">Nothing logged that day.</div>';
-
+  editingDayFoodId = null;
+  renderDayDetailFood();
   renderDayDetailActivityButtons();
   renderDayDetailWeight();
 
   modal.style.display = 'flex';
+}
+let editingDayFoodId = null;
+function renderDayDetailFood(){
+  const key = dayDetailKey;
+  const entries = state.calories[key]||[];
+  const foodEl = document.getElementById('dayDetailFood');
+  if(!foodEl) return;
+  const rows = entries.map(e=>{
+    if(editingDayFoodId === e.id){
+      return `<div class="log-item" style="flex-direction:column; align-items:stretch; gap:8px;">
+        <input type="text" id="editDayFoodName-${e.id}" value="${escapeHtml(e.name)}" placeholder="Name">
+        <div style="display:flex; gap:8px;">
+          <input type="number" id="editDayFoodQty-${e.id}" value="${e.qty!=null?e.qty:''}" placeholder="Quantity" style="flex:1;">
+          <select id="editDayFoodUnit-${e.id}" style="flex:1;">
+            <option value="g" ${e.unit==='g'?'selected':''}>grams</option>
+            <option value="unit" ${e.unit==='unit'?'selected':''}>units</option>
+          </select>
+        </div>
+        <input type="number" id="editDayFoodKcal-${e.id}" value="${e.kcal}" placeholder="kcal">
+        <div style="display:flex; gap:8px;">
+          <button class="btn-ghost" onclick="saveEditDayFood('${e.id}')">Save</button>
+          <button class="btn-ghost" onclick="cancelEditDayFood()">Cancel</button>
+        </div>
+      </div>`;
+    }
+    return `<div class="log-item">
+      <span>${escapeHtml(e.name)}${e.qty ? ` <span class="meta">· ${fmtQty(e)}</span>` : ''}</span>
+      <span><span class="amt">${e.kcal}</span> <button class="btn-ghost" onclick="startEditDayFood('${e.id}')">Edit</button> <button class="btn-ghost" onclick="deleteDayFood('${e.id}')">×</button></span>
+    </div>`;
+  });
+  foodEl.innerHTML = (rows.length ? rows.join('') : '<div class="empty">Nothing logged that day.</div>') + `
+    <div class="add-row" style="flex-direction:column; gap:8px; margin-top:10px;">
+      <input type="text" id="dayFoodName" placeholder="Food name">
+      <div style="display:flex; gap:8px;">
+        <input type="number" id="dayFoodQty" placeholder="Quantity (optional)" style="flex:1;">
+        <select id="dayFoodUnit" style="flex:1;">
+          <option value="g">grams</option>
+          <option value="unit">units</option>
+        </select>
+      </div>
+      <input type="number" id="dayFoodKcal" placeholder="kcal">
+      <button class="btn-ghost" onclick="addDayFood()">+ Add food to this day</button>
+    </div>`;
+}
+function addDayFood(){
+  const key = dayDetailKey;
+  const nameEl = document.getElementById('dayFoodName');
+  const qtyEl = document.getElementById('dayFoodQty');
+  const unitEl = document.getElementById('dayFoodUnit');
+  const kcalEl = document.getElementById('dayFoodKcal');
+  const name = nameEl.value.trim();
+  const kcal = parseInt(kcalEl.value);
+  if(!name || isNaN(kcal)){ alert('Enter both a food name and a kcal value.'); return; }
+  const qty = parseFloat(qtyEl.value) || null;
+  if(!state.calories[key]) state.calories[key] = [];
+  state.calories[key].push({id:uid(), name, kcal, qty, unit:unitEl.value});
+  sset('cal:log', state.calories);
+  renderDayDetailFood();
+  renderCalHistory();
+  if(key===TODAY) renderCalories();
+}
+function startEditDayFood(id){ editingDayFoodId = id; renderDayDetailFood(); }
+function cancelEditDayFood(){ editingDayFoodId = null; renderDayDetailFood(); }
+function saveEditDayFood(id){
+  const key = dayDetailKey;
+  const e = (state.calories[key]||[]).find(e=>e.id===id);
+  if(e){
+    e.name = document.getElementById('editDayFoodName-'+id).value.trim();
+    const kcalVal = parseInt(document.getElementById('editDayFoodKcal-'+id).value);
+    if(!isNaN(kcalVal)) e.kcal = kcalVal;
+    const qtyVal = parseFloat(document.getElementById('editDayFoodQty-'+id).value);
+    e.qty = isNaN(qtyVal) ? null : qtyVal;
+    e.unit = document.getElementById('editDayFoodUnit-'+id).value;
+    sset('cal:log', state.calories);
+  }
+  editingDayFoodId = null;
+  renderDayDetailFood();
+  renderCalHistory();
+  if(key===TODAY) renderCalories();
+}
+function deleteDayFood(id){
+  const key = dayDetailKey;
+  state.calories[key] = (state.calories[key]||[]).filter(e=>e.id!==id);
+  sset('cal:log', state.calories);
+  renderDayDetailFood();
+  renderCalHistory();
+  if(key===TODAY) renderCalories();
 }
 function renderDayDetailWeight(){
   const key = dayDetailKey;
@@ -1756,13 +1882,14 @@ function closeDayDetail(){
   dayDetailKey = null;
 }
 function renderDayDetailActivityButtons(){
-  const a = state.activities[dayDetailKey] || {gym:false, run:false};
-  const gymBtn = document.getElementById('dayDetailGymBtn');
-  const runBtn = document.getElementById('dayDetailRunBtn');
-  if(gymBtn) gymBtn.style.background = a.gym ? 'var(--c-cal)' : '';
-  if(gymBtn) gymBtn.style.color = a.gym ? '#fff' : '';
-  if(runBtn) runBtn.style.background = a.run ? 'var(--c-cal)' : '';
-  if(runBtn) runBtn.style.color = a.run ? '#fff' : '';
+  const a = state.activities[dayDetailKey] || {};
+  const map = { gym:'dayDetailGymBtn', run:'dayDetailRunBtn', basketball:'dayDetailBballBtn', hike:'dayDetailHikeBtn' };
+  Object.entries(map).forEach(([type, btnId])=>{
+    const btn = document.getElementById(btnId);
+    if(!btn) return;
+    btn.style.background = a[type] ? 'var(--c-cal)' : '';
+    btn.style.color = a[type] ? '#fff' : '';
+  });
 }
 function toggleDayActivity(type){
   if(!dayDetailKey) return;
@@ -1792,11 +1919,8 @@ function renderCalHistory(){
     const act = state.activities[key];
     const w = state.weights[key];
     const html = `<div class="hist-cell ${isToday?'hist-today':''} ${total?'hist-has':''}" onclick="openDayDetail('${key}')" title="Tap to see details">
-      <div class="hist-top-row">
-        <span class="hist-icon-left">${act?.gym ? '💪' : ''}</span>
-        <span class="hist-day">${d}</span>
-        <span class="hist-icon-right">${act?.run ? '🏃' : ''}</span>
-      </div>
+      <div class="hist-day-solo">${d}</div>
+      <div class="hist-sports">${act?.gym?'💪':''}${act?.run?'🏃':''}${act?.basketball?'🏀':''}${act?.hike?'🥾':''}</div>
       <div class="hist-kcal">${total ? total : ''}</div>
       <div class="hist-weight">${w ? w.value+w.unit : ''}</div>
     </div>`;
